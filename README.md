@@ -116,20 +116,29 @@ sudo systemctl enable --now leds
 
 ## Configuration
 
-Edit `src/main.rs` before building:
+All options are set via command-line flags. Defaults are shown below:
 
-| Constant | Default | Description |
-|---|---|---|
-| `NUM_PIXELS` | `60` | Number of LEDs in the strip |
-| GPIO pin | `18` | Set in `NeoPixelStrip::new(18, ...)` |
-| Brightness | `25` | 0–255, set in `NeoPixelStrip::new(..., 25)` |
-| Port | `3000` | Set in `TcpListener::bind` |
-
-Fade durations (default 3 s each) can be changed live from the web UI, or set as defaults in `runner.rs`:
-
-```rust
-pub const DEFAULT_FADE_DURATION: Duration = Duration::from_secs(3);
 ```
+Usage: led-controller [OPTIONS]
+
+Options:
+      --pixels <PIXELS>              Number of LEDs in the strip [default: 60]
+      --gpio-pin <GPIO_PIN>          GPIO pin number (hardware feature only) [default: 18]
+      --brightness <BRIGHTNESS>      LED brightness 0–255 (hardware feature only) [default: 25]
+      --port <PORT>                  Port to listen on [default: 3000]
+      --fade-in-ms <FADE_IN_MS>      Fade-in duration in milliseconds [default: 3000]
+      --fade-out-ms <FADE_OUT_MS>    Fade-out duration in milliseconds [default: 3000]
+      --crossfade-ms <CROSSFADE_MS>  Crossfade duration in milliseconds [default: 3000]
+  -h, --help                         Print help
+```
+
+Example — 144-pixel strip on GPIO 12, brighter, 5 s crossfades:
+
+```bash
+sudo ./led-controller --pixels 144 --gpio-pin 12 --brightness 80 --crossfade-ms 5000
+```
+
+Fade durations can also be adjusted live from the web UI without restarting.
 
 ## API
 

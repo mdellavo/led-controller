@@ -4,14 +4,45 @@ mod runner;
 mod api;
 
 use axum::{routing::{get, post}, Router};
+use clap::Parser;
 use tracing_subscriber::EnvFilter;
 
 use api::AppState;
 use effects::default_registry;
 use pixels::NullPixels;
-use runner::Runner;
+use runner::{Runner, RunnerConfig};
 
-const NUM_PIXELS: usize = 60;
+#[derive(Parser)]
+#[command(about = "WS2812B LED strip controller with web interface")]
+struct Args {
+    /// Number of LEDs in the strip
+    #[arg(long, default_value_t = 60)]
+    pixels: usize,
+
+    /// GPIO pin number (hardware feature only)
+    #[arg(long, default_value_t = 18)]
+    gpio_pin: i32,
+
+    /// LED brightness 0–255 (hardware feature only)
+    #[arg(long, default_value_t = 25)]
+    brightness: u8,
+
+    /// Port to listen on
+    #[arg(long, default_value_t = 3000)]
+    port: u16,
+
+    /// Fade-in duration in milliseconds
+    #[arg(long, default_value_t = 3000)]
+    fade_in_ms: u64,
+
+    /// Fade-out duration in milliseconds
+    #[arg(long, default_value_t = 3000)]
+    fade_out_ms: u64,
+
+    /// Crossfade duration in milliseconds
+    #[arg(long, default_value_t = 3000)]
+    crossfade_ms: u64,
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -22,23 +53,34 @@ async fn main() -> anyhow::Result<()> {
         )
         .init();
 
+    let args = Args::parse();
+
     let pixels: Box<dyn pixels::PixelStrip> = {
         #[cfg(feature = "hardware")]
         {
-            tracing::info!("initializing hardware LED strip on GPIO18, {} pixels", NUM_PIXELS);
-            Box::new(pixels::hardware::NeoPixelStrip::new(18, NUM_PIXELS, 25)?)
+            tracing::info!(
+                pin = args.gpio_pin,
+                pixels = args.pixels,
+                brightness = args.brightness,
+                "initializing hardware LED strip"
+            );
+            Box::new(pixels::hardware::NeoPixelStrip::new(args.gpio_pin, args.pixels, args.brightness)?)
         }
         #[cfg(not(feature = "hardware"))]
         {
-            tracing::info!("no hardware feature — using NullPixels (dev mode)");
-            Box::new(NullPixels::new(NUM_PIXELS))
+            tracing::info!(pixels = args.pixels, "no hardware feature — using NullPixels (dev mode)");
+            Box::new(NullPixels::new(args.pixels))
         }
     };
 
-    let registry = default_registry(NUM_PIXELS);
-    let runner = Runner::new(pixels, registry);
+    let registry = default_registry(args.pixels);
+    let config = RunnerConfig {
+        fade_in_ms: args.fade_in_ms,
+        fade_out_ms: args.fade_out_ms,
+        crossfade_ms: args.crossfade_ms,
+    };
+    let runner = Runner::new(pixels, registry, config);
 
-    // auto-start the first effect
     runner.send(runner::Command::Start);
 
     let state = AppState { runner };
@@ -50,8 +92,9 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/command", post(api::post_command))
         .with_state(state);
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await?;
-    tracing::info!("listening on http://0.0.0.0:3000");
+    let addr = format!("0.0.0.0:{}", args.port);
+    let listener = tokio::net::TcpListener::bind(&addr).await?;
+    tracing::info!("listening on http://{}", addr);
     axum::serve(listener, app).await?;
 
     Ok(())

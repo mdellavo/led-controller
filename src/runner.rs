@@ -165,6 +165,19 @@ pub struct SharedState {
 // Runner — public handle, lives in the Axum app state
 // --------------------------------------------------------------------------
 
+pub struct RunnerConfig {
+    pub fade_in_ms: u64,
+    pub fade_out_ms: u64,
+    pub crossfade_ms: u64,
+}
+
+impl Default for RunnerConfig {
+    fn default() -> Self {
+        let ms = DEFAULT_FADE_DURATION.as_millis() as u64;
+        Self { fade_in_ms: ms, fade_out_ms: ms, crossfade_ms: ms }
+    }
+}
+
 #[derive(Clone)]
 pub struct Runner {
     pub tx: std::sync::mpsc::SyncSender<Command>,
@@ -172,7 +185,7 @@ pub struct Runner {
 }
 
 impl Runner {
-    pub fn new(pixels: Box<dyn PixelStrip>, registry: EffectRegistry) -> Self {
+    pub fn new(pixels: Box<dyn PixelStrip>, registry: EffectRegistry, config: RunnerConfig) -> Self {
         let num_pixels = pixels.len();
         let (tx, rx) = std::sync::mpsc::sync_channel(32);
 
@@ -185,15 +198,15 @@ impl Runner {
             playlist: initial_playlist,
             playlist_index: 0,
             effects: effects_list,
-            fade_in_ms: DEFAULT_FADE_DURATION.as_millis() as u64,
-            fade_out_ms: DEFAULT_FADE_DURATION.as_millis() as u64,
-            crossfade_ms: DEFAULT_FADE_DURATION.as_millis() as u64,
+            fade_in_ms: config.fade_in_ms,
+            fade_out_ms: config.fade_out_ms,
+            crossfade_ms: config.crossfade_ms,
         }));
 
         let state_clone = Arc::clone(&shared_state);
 
         thread::spawn(move || {
-            run_loop(pixels, registry, rx, num_pixels, state_clone);
+            run_loop(pixels, registry, rx, num_pixels, state_clone, config);
         });
 
         Self {
@@ -240,14 +253,15 @@ fn run_loop(
     rx: std::sync::mpsc::Receiver<Command>,
     num_pixels: usize,
     shared: Arc<Mutex<SharedState>>,
+    config: RunnerConfig,
 ) {
     let black = vec![[0u8; 3]; num_pixels];
     let mut state = RunnerState::Idle;
     let mut playlist: Vec<String> = registry.names().to_vec();
     let mut playlist_index: usize = 0;
-    let mut fade_in_dur = DEFAULT_FADE_DURATION.as_secs_f32();
-    let mut fade_out_dur = DEFAULT_FADE_DURATION.as_secs_f32();
-    let mut crossfade_dur = DEFAULT_FADE_DURATION.as_secs_f32();
+    let mut fade_in_dur = config.fade_in_ms as f32 / 1000.0;
+    let mut fade_out_dur = config.fade_out_ms as f32 / 1000.0;
+    let mut crossfade_dur = config.crossfade_ms as f32 / 1000.0;
 
     let spawn_effect = |playlist: &[String], index: usize, registry: &EffectRegistry| -> Option<EffectHandle> {
         let name = playlist.get(index)?.clone();
