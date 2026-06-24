@@ -57,6 +57,12 @@ cargo install cross
 ./build-pi.sh --deploy pi@raspberrypi.local
 ```
 
+**Pass app flags through with `--`:**
+
+```bash
+./build-pi.sh --deploy pi@raspberrypi.local -- --pixels 144 --brightness 80 --crossfade-ms 5000
+```
+
 **Build only:**
 
 ```bash
@@ -76,11 +82,25 @@ cargo install cross
 ./build-pi.sh --no-hardware --deploy pi@raspberrypi.local
 ```
 
+Script flags (before `--`):
+
 | Flag | Default | Description |
 |---|---|---|
 | `--target <triple>` | `aarch64-unknown-linux-gnu` | Rust target triple |
 | `--no-hardware` | off | Build without the hardware feature (NullPixels) |
 | `--deploy user@host` | — | SCP the binary to the Pi after building |
+
+App flags (after `--`, passed through to the binary):
+
+| Flag | Default | Description |
+|---|---|---|
+| `--pixels <n>` | `60` | Number of LEDs in the strip |
+| `--gpio-pin <n>` | `18` | GPIO pin number |
+| `--brightness <n>` | `25` | LED brightness 0–255 |
+| `--port <n>` | `3000` | Port to listen on |
+| `--fade-in-ms <n>` | `3000` | Fade-in duration in milliseconds |
+| `--fade-out-ms <n>` | `3000` | Fade-out duration in milliseconds |
+| `--crossfade-ms <n>` | `3000` | Crossfade duration in milliseconds |
 
 ### On the Raspberry Pi
 
