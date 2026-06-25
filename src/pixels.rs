@@ -69,6 +69,10 @@ pub mod hardware {
         }
     }
 
+    // rs_ws281x::Controller holds raw C pointers which Rust marks non-Send by default.
+    // Safety: the runner owns the strip exclusively on a single thread at all times.
+    unsafe impl Send for NeoPixelStrip {}
+
     impl PixelStrip for NeoPixelStrip {
         fn set(&mut self, index: usize, color: Color) {
             let leds = self.controller.leds_mut(0);

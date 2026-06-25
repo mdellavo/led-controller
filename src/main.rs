@@ -9,8 +9,10 @@ use tracing_subscriber::EnvFilter;
 
 use api::AppState;
 use effects::default_registry;
-use pixels::NullPixels;
 use runner::{Runner, RunnerConfig};
+
+#[cfg(not(feature = "hardware"))]
+use pixels::NullPixels;
 
 #[derive(Parser)]
 #[command(about = "WS2812B LED strip controller with web interface")]
