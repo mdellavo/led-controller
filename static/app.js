@@ -53,6 +53,19 @@ setupSlider('fade-in', 'set_fade_in', 'fade-in-val');
 setupSlider('crossfade', 'set_crossfade', 'crossfade-val');
 setupSlider('fade-out', 'set_fade_out', 'fade-out-val');
 
+// Effect duration slider (0 = ∞)
+const effectDurSlider = document.getElementById('effect-duration');
+const effectDurVal = document.getElementById('effect-duration-val');
+const fmtDuration = (ms) => ms === 0 ? '∞' : ms >= 60000
+  ? (ms / 60000).toFixed(1) + 'm'
+  : (ms / 1000).toFixed(0) + 's';
+effectDurSlider.addEventListener('input', () => {
+  const ms = parseInt(effectDurSlider.value);
+  effectDurVal.textContent = fmtDuration(ms);
+  clearTimeout(fadeDebouncers['effect-duration']);
+  fadeDebouncers['effect-duration'] = setTimeout(() => api('set_effect_duration', { value_ms: ms }), 300);
+});
+
 // State polling
 let lastState = null;
 
@@ -112,6 +125,8 @@ const renderState = (state) => {
     syncSlider('fade-in', 'fade-in-val', state.fade_in_ms);
     syncSlider('crossfade', 'crossfade-val', state.crossfade_ms);
     syncSlider('fade-out', 'fade-out-val', state.fade_out_ms);
+    effectDurSlider.value = state.effect_duration_ms;
+    effectDurVal.textContent = fmtDuration(state.effect_duration_ms);
   }
 };
 

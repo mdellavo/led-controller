@@ -78,6 +78,7 @@ pub async fn post_command(
         "set_fade_in" => req.value_ms.map(Command::SetFadeInMs),
         "set_fade_out" => req.value_ms.map(Command::SetFadeOutMs),
         "set_crossfade" => req.value_ms.map(Command::SetCrossfadeMs),
+        "set_effect_duration" => req.value_ms.map(Command::SetEffectDurationMs),
         _ => None,
     };
 

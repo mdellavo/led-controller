@@ -44,6 +44,10 @@ struct Args {
     /// Crossfade duration in milliseconds
     #[arg(long, default_value_t = 3000)]
     crossfade_ms: u64,
+
+    /// How long each effect plays before auto-advancing to the next (0 = infinite)
+    #[arg(long, default_value_t = 0)]
+    effect_duration_ms: u64,
 }
 
 #[tokio::main]
@@ -80,6 +84,7 @@ async fn main() -> anyhow::Result<()> {
         fade_in_ms: args.fade_in_ms,
         fade_out_ms: args.fade_out_ms,
         crossfade_ms: args.crossfade_ms,
+        effect_duration_ms: args.effect_duration_ms,
     };
     let runner = Runner::new(pixels, registry, config);
 

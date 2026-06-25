@@ -146,6 +146,7 @@ pub enum Command {
     SetFadeInMs(u64),
     SetFadeOutMs(u64),
     SetCrossfadeMs(u64),
+    SetEffectDurationMs(u64),
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -159,6 +160,8 @@ pub struct SharedState {
     pub fade_in_ms: u64,
     pub fade_out_ms: u64,
     pub crossfade_ms: u64,
+    /// 0 = run indefinitely until manually advanced
+    pub effect_duration_ms: u64,
 }
 
 // --------------------------------------------------------------------------
@@ -169,12 +172,14 @@ pub struct RunnerConfig {
     pub fade_in_ms: u64,
     pub fade_out_ms: u64,
     pub crossfade_ms: u64,
+    /// 0 = run indefinitely until manually advanced
+    pub effect_duration_ms: u64,
 }
 
 impl Default for RunnerConfig {
     fn default() -> Self {
         let ms = DEFAULT_FADE_DURATION.as_millis() as u64;
-        Self { fade_in_ms: ms, fade_out_ms: ms, crossfade_ms: ms }
+        Self { fade_in_ms: ms, fade_out_ms: ms, crossfade_ms: ms, effect_duration_ms: 0 }
     }
 }
 
@@ -201,6 +206,7 @@ impl Runner {
             fade_in_ms: config.fade_in_ms,
             fade_out_ms: config.fade_out_ms,
             crossfade_ms: config.crossfade_ms,
+            effect_duration_ms: config.effect_duration_ms,
         }));
 
         let state_clone = Arc::clone(&shared_state);
@@ -262,6 +268,9 @@ fn run_loop(
     let mut fade_in_dur = config.fade_in_ms as f32 / 1000.0;
     let mut fade_out_dur = config.fade_out_ms as f32 / 1000.0;
     let mut crossfade_dur = config.crossfade_ms as f32 / 1000.0;
+    // 0.0 = infinite; positive = auto-advance after this many seconds
+    let mut effect_duration = config.effect_duration_ms as f32 / 1000.0;
+    let mut effect_elapsed: f32 = 0.0;
 
     let spawn_effect = |playlist: &[String], index: usize, registry: &EffectRegistry| -> Option<EffectHandle> {
         let name = playlist.get(index)?.clone();
@@ -284,6 +293,11 @@ fn run_loop(
                 Command::SetCrossfadeMs(ms) => {
                     crossfade_dur = ms as f32 / 1000.0;
                     if let Ok(mut s) = shared.lock() { s.crossfade_ms = ms; }
+                }
+                Command::SetEffectDurationMs(ms) => {
+                    effect_duration = ms as f32 / 1000.0;
+                    effect_elapsed = 0.0;
+                    if let Ok(mut s) = shared.lock() { s.effect_duration_ms = ms; }
                 }
                 Command::Randomize => {
                     let mut rng = rand::thread_rng();
@@ -379,6 +393,7 @@ fn run_loop(
                 let buf = handle.read_buffer();
                 let output = scale_buffer(&buf, new_alpha);
                 let next = if new_alpha >= 1.0 {
+                    effect_elapsed = 0.0;
                     RunnerState::Running { handle }
                 } else {
                     RunnerState::FadingIn { handle, alpha: new_alpha, duration }
@@ -387,6 +402,7 @@ fn run_loop(
             }
 
             RunnerState::Running { handle } => {
+                effect_elapsed += dt;
                 let buf = handle.read_buffer();
                 (buf, RunnerState::Running { handle })
             }
@@ -398,6 +414,7 @@ fn run_loop(
                 let output = blend_buffers(&from_buf, &to_buf, new_alpha);
                 let next = if new_alpha >= 1.0 {
                     // from is dropped here, joining its thread
+                    effect_elapsed = 0.0;
                     RunnerState::Running { handle: to }
                 } else {
                     RunnerState::CrossFading { from, to, alpha: new_alpha, duration }
@@ -420,6 +437,24 @@ fn run_loop(
         };
 
         state = next_state;
+
+        // --- auto-advance when effect duration expires ---
+        if effect_duration > 0.0
+            && effect_elapsed >= effect_duration
+            && matches!(state, RunnerState::Running { .. })
+        {
+            effect_elapsed = 0.0;
+            playlist_index = (playlist_index + 1) % playlist.len().max(1);
+            if let Ok(mut s) = shared.lock() { s.playlist_index = playlist_index; }
+            if let Some(new_handle) = spawn_effect(&playlist, playlist_index, &registry) {
+                state = start_effect(
+                    std::mem::replace(&mut state, RunnerState::Idle),
+                    new_handle,
+                    fade_in_dur,
+                    crossfade_dur,
+                );
+            }
+        }
 
         // --- write to hardware ---
         for (i, color) in output.iter().enumerate() {
