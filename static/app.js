@@ -31,13 +31,78 @@ document.getElementById('btn-play-selected').onclick = () => {
   if (name) api('select', { effect: name });
 };
 
-// Playlist item click
-document.getElementById('playlist').addEventListener('click', (e) => {
+// Add to playlist
+document.getElementById('btn-add-to-playlist').onclick = () => {
+  const name = document.getElementById('playlist-add-select').value;
+  if (name) api('add_to_playlist', { effect: name });
+};
+
+// --------------------------------------------------------------------------
+// Playlist — drag-to-reorder, click-to-play, remove button
+// --------------------------------------------------------------------------
+
+let dragSrcIndex = null;
+let isDragging = false;
+
+const playlistEl = document.getElementById('playlist');
+
+playlistEl.addEventListener('dragstart', (e) => {
   const item = e.target.closest('.playlist-item');
-  if (item) api('select', { effect: item.dataset.name });
+  if (!item) return;
+  dragSrcIndex = parseInt(item.dataset.index);
+  isDragging = true;
+  item.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
 });
 
-// Fade duration sliders
+playlistEl.addEventListener('dragend', (e) => {
+  isDragging = false;
+  document.querySelectorAll('.playlist-item').forEach((el) => {
+    el.classList.remove('dragging', 'drag-over');
+  });
+});
+
+playlistEl.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const item = e.target.closest('.playlist-item');
+  document.querySelectorAll('.playlist-item').forEach((el) => el.classList.remove('drag-over'));
+  if (item) item.classList.add('drag-over');
+});
+
+playlistEl.addEventListener('dragleave', (e) => {
+  const item = e.target.closest('.playlist-item');
+  if (item) item.classList.remove('drag-over');
+});
+
+playlistEl.addEventListener('drop', (e) => {
+  e.preventDefault();
+  const item = e.target.closest('.playlist-item');
+  if (!item) return;
+  const toIndex = parseInt(item.dataset.index);
+  if (dragSrcIndex !== null && dragSrcIndex !== toIndex) {
+    api('move_in_playlist', { index: dragSrcIndex, to_index: toIndex });
+  }
+  dragSrcIndex = null;
+});
+
+// Click on item name to play; click remove button to remove
+playlistEl.addEventListener('click', (e) => {
+  if (e.target.closest('.item-remove')) {
+    const item = e.target.closest('.playlist-item');
+    if (item) api('remove_from_playlist', { index: parseInt(item.dataset.index) });
+    return;
+  }
+  if (e.target.closest('.item-name')) {
+    const item = e.target.closest('.playlist-item');
+    if (item) api('select', { effect: item.dataset.name });
+  }
+});
+
+// --------------------------------------------------------------------------
+// Sliders
+// --------------------------------------------------------------------------
+
 const fadeDebouncers = {};
 const setupSlider = (id, action, valId) => {
   const slider = document.getElementById(id);
@@ -53,7 +118,6 @@ setupSlider('fade-in', 'set_fade_in', 'fade-in-val');
 setupSlider('crossfade', 'set_crossfade', 'crossfade-val');
 setupSlider('fade-out', 'set_fade_out', 'fade-out-val');
 
-// Effect duration slider (0 = ∞)
 const effectDurSlider = document.getElementById('effect-duration');
 const effectDurVal = document.getElementById('effect-duration-val');
 const fmtDuration = (ms) => ms === 0 ? '∞' : ms >= 60000
@@ -66,7 +130,10 @@ effectDurSlider.addEventListener('input', () => {
   fadeDebouncers['effect-duration'] = setTimeout(() => api('set_effect_duration', { value_ms: ms }), 300);
 });
 
-// State polling
+// --------------------------------------------------------------------------
+// State polling + rendering
+// --------------------------------------------------------------------------
+
 let lastState = null;
 
 const renderState = (state) => {
@@ -78,11 +145,7 @@ const renderState = (state) => {
   dot.className = 'status-dot';
   if (state.transition) {
     dot.classList.add('transition');
-    const labels = {
-      fading_in: 'Fading In',
-      fading_out: 'Fading Out',
-      crossfading: 'Crossfading',
-    };
+    const labels = { fading_in: 'Fading In', fading_out: 'Fading Out', crossfading: 'Crossfading' };
     label.textContent = labels[state.transition] || state.transition;
   } else if (state.is_running) {
     dot.classList.add('running');
@@ -93,34 +156,40 @@ const renderState = (state) => {
   }
   effect.textContent = state.current_effect || '';
 
-  // Populate effects dropdown (once)
-  const select = document.getElementById('effect-select');
-  if (select.options.length !== state.effects.length) {
-    select.innerHTML = '';
-    state.effects.forEach((name) => {
-      const opt = document.createElement('option');
-      opt.value = name;
-      opt.textContent = name;
-      select.appendChild(opt);
+  // Populate effect dropdowns (once)
+  if (!lastState || lastState.effects.length !== state.effects.length) {
+    ['effect-select', 'playlist-add-select'].forEach((id) => {
+      const sel = document.getElementById(id);
+      const prev = sel.value;
+      sel.innerHTML = '';
+      state.effects.forEach((name) => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        sel.appendChild(opt);
+      });
+      if (prev) sel.value = prev;
     });
   }
 
-  // Playlist
-  const playlistEl = document.getElementById('playlist');
-  const prevInner = playlistEl.innerHTML;
-  const newInner = state.playlist
-    .map((name, i) => {
-      const active = i === state.playlist_index && state.is_running;
-      return `<div class="playlist-item${active ? ' active' : ''}" data-name="${name}">
-        <span class="item-dot"></span>
-        <span class="item-num">${i + 1}</span>
-        <span>${name}</span>
-      </div>`;
-    })
-    .join('');
-  if (newInner !== prevInner) playlistEl.innerHTML = newInner;
+  // Playlist — skip re-render during drag to avoid interrupting the interaction
+  if (!isDragging) {
+    const newInner = state.playlist
+      .map((name, i) => {
+        const active = i === state.playlist_index && state.is_running;
+        return `<div class="playlist-item${active ? ' active' : ''}" data-name="${name}" data-index="${i}" draggable="true">
+          <span class="item-drag" title="Drag to reorder">⠿</span>
+          <span class="item-dot"></span>
+          <span class="item-num">${i + 1}</span>
+          <span class="item-name">${name}</span>
+          <button class="item-remove" title="Remove">✕</button>
+        </div>`;
+      })
+      .join('');
+    if (playlistEl.innerHTML !== newInner) playlistEl.innerHTML = newInner;
+  }
 
-  // Sync sliders to reported server values (only on first load)
+  // Sync sliders on first load
   if (!lastState) {
     syncSlider('fade-in', 'fade-in-val', state.fade_in_ms);
     syncSlider('crossfade', 'crossfade-val', state.crossfade_ms);

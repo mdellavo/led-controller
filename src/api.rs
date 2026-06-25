@@ -55,6 +55,8 @@ pub struct CommandRequest {
     pub action: String,
     pub effect: Option<String>,
     pub value_ms: Option<u64>,
+    pub index: Option<usize>,
+    pub to_index: Option<usize>,
 }
 
 #[derive(Serialize)]
@@ -79,6 +81,12 @@ pub async fn post_command(
         "set_fade_out" => req.value_ms.map(Command::SetFadeOutMs),
         "set_crossfade" => req.value_ms.map(Command::SetCrossfadeMs),
         "set_effect_duration" => req.value_ms.map(Command::SetEffectDurationMs),
+        "add_to_playlist" => req.effect.map(Command::AddToPlaylist),
+        "remove_from_playlist" => req.index.map(Command::RemoveFromPlaylist),
+        "move_in_playlist" => match (req.index, req.to_index) {
+            (Some(from), Some(to)) => Some(Command::MoveInPlaylist(from, to)),
+            _ => None,
+        },
         _ => None,
     };
 

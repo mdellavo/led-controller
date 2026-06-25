@@ -147,6 +147,9 @@ pub enum Command {
     SetFadeOutMs(u64),
     SetCrossfadeMs(u64),
     SetEffectDurationMs(u64),
+    AddToPlaylist(String),
+    RemoveFromPlaylist(usize),
+    MoveInPlaylist(usize, usize),
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -306,6 +309,51 @@ fn run_loop(
                     if let Ok(mut s) = shared.lock() {
                         s.playlist = playlist.clone();
                         s.playlist_index = 0;
+                    }
+                }
+                Command::AddToPlaylist(name) => {
+                    if registry.contains(&name) {
+                        playlist.push(name.clone());
+                        if let Ok(mut s) = shared.lock() {
+                            s.playlist.push(name);
+                        }
+                    }
+                }
+                Command::RemoveFromPlaylist(idx) => {
+                    if idx < playlist.len() {
+                        playlist.remove(idx);
+                        // keep playlist_index in bounds and compensate for the removed slot
+                        playlist_index = if playlist.is_empty() {
+                            0
+                        } else if idx < playlist_index {
+                            playlist_index - 1
+                        } else {
+                            playlist_index.min(playlist.len() - 1)
+                        };
+                        if let Ok(mut s) = shared.lock() {
+                            s.playlist = playlist.clone();
+                            s.playlist_index = playlist_index;
+                        }
+                    }
+                }
+                Command::MoveInPlaylist(from, to) => {
+                    if from < playlist.len() && to < playlist.len() && from != to {
+                        let item = playlist.remove(from);
+                        playlist.insert(to, item);
+                        // adjust the tracked index to follow the item that moved
+                        playlist_index = if playlist_index == from {
+                            to
+                        } else if from < playlist_index && to >= playlist_index {
+                            playlist_index - 1
+                        } else if from > playlist_index && to <= playlist_index {
+                            playlist_index + 1
+                        } else {
+                            playlist_index
+                        };
+                        if let Ok(mut s) = shared.lock() {
+                            s.playlist = playlist.clone();
+                            s.playlist_index = playlist_index;
+                        }
                     }
                 }
 

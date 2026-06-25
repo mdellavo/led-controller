@@ -188,7 +188,7 @@
       display: flex;
       flex-direction: column;
       gap: 0.3rem;
-      max-height: 220px;
+      max-height: 280px;
       overflow-y: auto;
     }
 
@@ -196,17 +196,36 @@
       display: flex;
       align-items: center;
       gap: 0.5rem;
-      padding: 0.45rem 0.625rem;
+      padding: 0.35rem 0.5rem;
       border-radius: 6px;
       font-size: 0.85rem;
-      cursor: pointer;
       transition: background 0.1s;
       color: var(--text-dim);
+      user-select: none;
     }
     .playlist-item:hover { background: var(--border); color: var(--text); }
     .playlist-item.active {
       background: var(--accent-dim);
       color: var(--text);
+    }
+    .playlist-item.drag-over {
+      border-top: 2px solid var(--accent);
+    }
+    .playlist-item.dragging { opacity: 0.4; }
+
+    .item-drag {
+      cursor: grab;
+      color: var(--text-dim);
+      font-size: 0.75rem;
+      padding: 0 0.1rem;
+      flex-shrink: 0;
+      line-height: 1;
+    }
+    .item-drag:active { cursor: grabbing; }
+
+    .item-name {
+      flex: 1;
+      cursor: pointer;
     }
 
     .playlist-item .item-num {
@@ -226,6 +245,27 @@
       opacity: 0;
     }
     .playlist-item.active .item-dot { opacity: 1; }
+
+    .item-remove {
+      background: none;
+      border: none;
+      color: var(--text-dim);
+      cursor: pointer;
+      font-size: 0.9rem;
+      padding: 0 0.2rem;
+      flex-shrink: 0;
+      line-height: 1;
+      opacity: 0;
+      transition: opacity 0.1s, color 0.1s;
+    }
+    .playlist-item:hover .item-remove { opacity: 1; }
+    .item-remove:hover { color: var(--red); }
+
+    .playlist-add {
+      display: flex;
+      gap: 0.625rem;
+      margin-top: 0.75rem;
+    }
 
     /* Error toast */
     #error-toast {
@@ -280,8 +320,10 @@
     <div class="card">
       <div class="card-title">Playlist</div>
       <div class="playlist" id="playlist"></div>
-      <div style="margin-top:0.875rem">
-        <button class="btn-secondary" id="btn-shuffle" style="width:100%">Shuffle Playlist</button>
+      <div class="playlist-add">
+        <select id="playlist-add-select" style="flex:1"></select>
+        <button class="btn-primary" id="btn-add-to-playlist" style="flex:0;white-space:nowrap">Add</button>
+        <button class="btn-secondary" id="btn-shuffle" style="flex:0;white-space:nowrap">Shuffle</button>
       </div>
     </div>
 
