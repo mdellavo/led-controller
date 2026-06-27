@@ -4,12 +4,15 @@ A Rust web server for controlling WS2812B LED strips (NeoPixels) on a Raspberry 
 
 ## Features
 
-- Web control panel: start, stop, next effect, effect picker, playlist shuffle
-- Smooth transitions: fade in on start, fade out on stop, crossfade when switching effects
+- Web control panel: start, stop, next, effect picker, playlist management
+- Smooth transitions: fade in on start, fade out on stop, crossfade when switching effects — each with a configurable duration (default 3 s)
+- Auto-advance: configurable per-effect play time before moving to the next playlist entry
+- Full playlist management: add, remove, drag-to-reorder, shuffle
+- 23 built-in effects (see below)
 - Each effect runs in its own OS thread
 - Pluggable effect system — add a new effect in one file
 - `NullPixels` dev mode (no hardware required) with debug logging
-- Single binary deployment — no runtime dependencies beyond the binary itself
+- Single binary deployment — no runtime dependencies on the target beyond the binary itself
 
 ## Hardware
 
@@ -18,7 +21,7 @@ A Rust web server for controlling WS2812B LED strips (NeoPixels) on a Raspberry 
 - The `rpi_ws281x` C library must be installed on the Pi:
 
 ```bash
-sudo apt install -y build-essential python3-dev swig python3-setuptools
+sudo apt install -y build-essential cmake libclang-dev
 git clone https://github.com/jgarff/rpi_ws281x
 cd rpi_ws281x && mkdir build && cd build
 cmake -D BUILD_SHARED=OFF -D BUILD_TEST=OFF ..
@@ -101,6 +104,7 @@ App flags (after `--`, passed through to the binary):
 | `--fade-in-ms <n>` | `3000` | Fade-in duration in milliseconds |
 | `--fade-out-ms <n>` | `3000` | Fade-out duration in milliseconds |
 | `--crossfade-ms <n>` | `3000` | Crossfade duration in milliseconds |
+| `--effect-duration-ms <n>` | `0` | Time each effect plays before auto-advancing (0 = infinite) |
 
 ### On the Raspberry Pi
 
@@ -121,8 +125,8 @@ Description=LED Controller
 After=network.target
 
 [Service]
-ExecStart=/home/pi/led-controller/led-controller
-WorkingDirectory=/home/pi/led-controller
+ExecStart=/home/pi/led-controller --effect-duration-ms 30000
+WorkingDirectory=/home/pi
 Restart=on-failure
 User=root
 
@@ -142,23 +146,61 @@ All options are set via command-line flags. Defaults are shown below:
 Usage: led-controller [OPTIONS]
 
 Options:
-      --pixels <PIXELS>              Number of LEDs in the strip [default: 60]
-      --gpio-pin <GPIO_PIN>          GPIO pin number (hardware feature only) [default: 18]
-      --brightness <BRIGHTNESS>      LED brightness 0–255 (hardware feature only) [default: 25]
-      --port <PORT>                  Port to listen on [default: 3000]
-      --fade-in-ms <FADE_IN_MS>      Fade-in duration in milliseconds [default: 3000]
-      --fade-out-ms <FADE_OUT_MS>    Fade-out duration in milliseconds [default: 3000]
-      --crossfade-ms <CROSSFADE_MS>  Crossfade duration in milliseconds [default: 3000]
-  -h, --help                         Print help
+      --pixels <PIXELS>                      Number of LEDs in the strip [default: 60]
+      --gpio-pin <GPIO_PIN>                  GPIO pin number (hardware feature only) [default: 18]
+      --brightness <BRIGHTNESS>              LED brightness 0–255 (hardware feature only) [default: 25]
+      --port <PORT>                          Port to listen on [default: 3000]
+      --fade-in-ms <FADE_IN_MS>              Fade-in duration in milliseconds [default: 3000]
+      --fade-out-ms <FADE_OUT_MS>            Fade-out duration in milliseconds [default: 3000]
+      --crossfade-ms <CROSSFADE_MS>          Crossfade duration in milliseconds [default: 3000]
+      --effect-duration-ms <EFFECT_DUR_MS>   Time per effect before auto-advancing (0 = infinite) [default: 0]
+  -h, --help                                 Print help
 ```
 
-Example — 144-pixel strip on GPIO 12, brighter, 5 s crossfades:
+Example — 144-pixel strip on GPIO 12, 30 s per effect with 5 s crossfades:
 
 ```bash
-sudo ./led-controller --pixels 144 --gpio-pin 12 --brightness 80 --crossfade-ms 5000
+sudo ./led-controller --pixels 144 --gpio-pin 12 --brightness 80 --effect-duration-ms 30000 --crossfade-ms 5000
 ```
 
-Fade durations can also be adjusted live from the web UI without restarting.
+All timing values can also be adjusted live from the web UI without restarting.
+
+## Web UI
+
+Open `http://<pi-ip>:3000` in a browser.
+
+| Section | Controls |
+|---|---|
+| **Status** | Coloured dot (green = running, amber = transitioning, grey = stopped) + current effect name |
+| **Controls** | Start, Next, Stop |
+| **Select Effect** | Dropdown of all registered effects + Play button to jump to it immediately |
+| **Playlist** | Ordered list of effects to cycle through. Drag `⠿` to reorder, click `✕` to remove, click effect name to play it. Dropdown + **Add** to append any effect. **Shuffle** to randomise order. |
+| **Effect Duration** | How long each effect plays before auto-advancing (0 = manual only) |
+| **Transition Durations** | Separate sliders for fade-in, crossfade, and fade-out |
+
+## Effects
+
+| Effect | Description |
+|---|---|
+| Rainbow | Full-strip colour wheel sweep |
+| Random Fade | Sparks that ignite and decay at random positions |
+| Chase | Colour comet with a fading tail |
+| Sparkle | White twinkle with smooth per-pixel brightness transitions |
+| Strobe / Strobe Red | Rapid flash burst followed by a pause |
+| Cylon | Larson scanner — bright eye bouncing left↔right with a fading tail |
+| KITT | Centre-outward Larson scanner |
+| Halloween Eyes | Pair of glowing eyes that appear at a random position and fade out |
+| Twinkle | Random pixels lit in a fixed colour |
+| Random Twinkle | Random pixels each with a random colour |
+| Snow Sparkle | Dim white background with bright white sparkles |
+| Running Lights | Sine-wave brightness pattern chasing along the strip |
+| Color Wipe Red/Green/Blue | Sequential pixel fill then clear, looping |
+| Theatre Chase | Every 3rd pixel marching, theatre-marquee style |
+| Theatre Chase Rainbow | Theatre chase with rainbow colour cycling |
+| Fire | Realistic flame simulation with cooling and sparking physics |
+| Bouncing Balls | Gravity-physics balls bouncing on a vertical strip |
+| Meteor Rain | Meteor with a glowing decaying tail |
+| Solid Red/Green/Blue/White | Static solid colour |
 
 ## API
 
@@ -166,19 +208,18 @@ All endpoints accept/return JSON.
 
 ### `GET /api/state`
 
-Returns current runner state:
-
 ```json
 {
   "is_running": true,
   "current_effect": "Rainbow",
   "transition": "crossfading",
-  "playlist": ["Rainbow", "Chase", "Sparkle", "Random Fade"],
+  "playlist": ["Rainbow", "Fire", "Meteor Rain"],
   "playlist_index": 1,
-  "effects": ["Rainbow", "Random Fade", "Chase", "Sparkle", "Solid Red", "..."],
+  "effects": ["Rainbow", "Random Fade", "Chase", "..."],
   "fade_in_ms": 3000,
   "fade_out_ms": 3000,
-  "crossfade_ms": 3000
+  "crossfade_ms": 3000,
+  "effect_duration_ms": 30000
 }
 ```
 
@@ -187,7 +228,7 @@ Returns current runner state:
 ### `POST /api/command`
 
 ```json
-{ "action": "<action>", "effect": "<name>", "value_ms": 2000 }
+{ "action": "<action>", "effect": "<name>", "value_ms": 2000, "index": 0, "to_index": 3 }
 ```
 
 | Action | Extra fields | Description |
@@ -197,9 +238,13 @@ Returns current runner state:
 | `next` | — | Crossfade to the next effect in the playlist |
 | `select` | `effect` | Crossfade to a named effect |
 | `randomize` | — | Shuffle the playlist and restart from position 0 |
-| `set_fade_in` | `value_ms` | Set fade-in duration in milliseconds |
-| `set_fade_out` | `value_ms` | Set fade-out duration in milliseconds |
-| `set_crossfade` | `value_ms` | Set crossfade duration in milliseconds |
+| `add_to_playlist` | `effect` | Append a named effect to the playlist |
+| `remove_from_playlist` | `index` | Remove the effect at the given playlist position |
+| `move_in_playlist` | `index`, `to_index` | Move a playlist item to a new position |
+| `set_fade_in` | `value_ms` | Set fade-in duration |
+| `set_fade_out` | `value_ms` | Set fade-out duration |
+| `set_crossfade` | `value_ms` | Set crossfade duration |
+| `set_effect_duration` | `value_ms` | Set per-effect play time (0 = infinite) |
 
 ## Adding an effect
 
@@ -222,9 +267,8 @@ impl Effect for MyEffect {
 
     fn update(&mut self, buffer: &mut Buffer, delta: Duration) -> bool {
         self.time += delta.as_secs_f32();
-        for (i, pixel) in buffer.iter_mut().enumerate() {
-            // write RGB values to each pixel
-            *pixel = [0, 0, 0];
+        for pixel in buffer.iter_mut() {
+            *pixel = [0, 0, 0]; // write RGB values
         }
         true // return false to signal natural completion
     }
@@ -244,23 +288,34 @@ pub fn default_registry(num_pixels: usize) -> EffectRegistry {
 }
 ```
 
-That's it. The effect appears in the web UI dropdown and playlist immediately.
+The effect appears in the web UI dropdown and playlist immediately.
 
 ## Project structure
 
 ```
 src/
-├── main.rs              entry point — wires Axum server and runner
-├── pixels.rs            PixelStrip trait, NullPixels, hardware NeoPixelStrip
-├── runner.rs            effect thread management, fade/crossfade state machine
+├── main.rs              entry point — parses CLI flags, wires Axum server and runner
+├── pixels.rs            PixelStrip trait, NullPixels (dev), NeoPixelStrip (hardware)
+├── runner.rs            effect thread management, fade/crossfade state machine, playlist
 ├── api.rs               Axum route handlers
 └── effects/
     ├── mod.rs           Effect trait, EffectRegistry, default_registry()
-    ├── rainbow.rs       full-strip color wheel sweep
+    ├── rainbow.rs       full-strip colour wheel sweep
     ├── fade.rs          random sparks that ignite and decay
-    ├── chase.rs         color comet with fading tail
+    ├── chase.rs         colour comet with fading tail
     ├── sparkle.rs       white twinkle with smooth brightness
-    └── solid.rs         static solid color
+    ├── solid.rs         static solid colour
+    ├── strobe.rs        rapid flash burst
+    ├── cylon.rs         Larson scanner (Cylon + KITT variants)
+    ├── halloween_eyes.rs glowing eyes that appear and fade
+    ├── twinkle.rs       random pixel twinkle (fixed + random colour)
+    ├── snow_sparkle.rs  dim background with bright sparkles
+    ├── running_lights.rs sine-wave brightness chase
+    ├── color_wipe.rs    sequential pixel fill
+    ├── theatre_chase.rs theatre-marquee march (solid + rainbow)
+    ├── fire.rs          flame simulation
+    ├── bouncing_balls.rs gravity-physics bouncing balls
+    └── meteor.rs        meteor with decaying tail
 static/
 ├── index.html           control panel (embedded in binary via include_str!)
 └── app.js               frontend JS (embedded in binary via include_str!)
@@ -268,10 +323,11 @@ static/
 
 ## Transition behavior
 
-| Situation | Transition |
+| Situation | Result |
 |---|---|
 | Start from stopped | Fade in from black over `fade_in_ms` |
 | Stop while running | Fade out to black over `fade_out_ms` |
-| Switch effects while running | Both effect threads run simultaneously; pixel buffers are per-pixel lerped over `crossfade_ms` |
-| Switch again mid-crossfade | Outgoing effect is dropped; new effect crossfades from the current blended frame |
+| Switch effects while running | Both effect threads run simultaneously; buffers are per-pixel lerped over `crossfade_ms` |
+| Switch again mid-crossfade | Outgoing effect dropped; new effect crossfades from the current blended frame |
 | Stop mid-crossfade | Incoming effect fades out from its current blend position |
+| Effect duration expires | Auto-crossfade to next playlist entry; timer resets when effect reaches full Running state |
