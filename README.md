@@ -24,6 +24,8 @@ A Rust web server for controlling WS2812B LED strips (NeoPixels) on a Raspberry 
 ## Changelog
 
 **Current**
+- Periodic FPS log every 5 seconds at `info` level showing actual achieved frame rate
+- Speed slider range extended to 10×
 - WebSocket push replaces 500 ms polling — UI updates within one frame on any state change, with auto-reconnect
 - Mobile-friendly UI — 44 px touch targets, pointer-event drag-to-reorder (works on touchscreens), always-visible remove buttons on touch devices
 - Persist UI state (playlist, speed, brightness, gamma, color order, durations) across restarts via `led-state.json`
@@ -236,7 +238,7 @@ Open `http://<pi-ip>:3000` in a browser.
 | **Controls** | Start, Next, Stop |
 | **Select Effect** | Dropdown of all registered effects + Play button to jump to it immediately |
 | **Playlist** | Ordered list of effects to cycle through. Drag `⠿` to reorder, click `✕` to remove, click effect name to play it. Dropdown + **Add** to append any effect. **Shuffle** to randomise order. |
-| **Speed** | Multiplier applied to every effect's time delta (0.1× – 4.0×, live) |
+| **Speed** | Multiplier applied to every effect's time delta (0.1× – 10.0×, live) |
 | **Brightness** | Software brightness scale applied to all pixel output (0–100%, live) |
 | **Effect Duration** | How long each effect plays before auto-advancing (0 = manual only) |
 | **Transition Durations** | Separate sliders for fade-in, crossfade, and fade-out |
