@@ -1,3 +1,34 @@
+const EFFECT_ICONS = {
+  'Rainbow':               '🌈',
+  'Random Fade':           '🎆',
+  'Chase':                 '💨',
+  'Sparkle':               '✨',
+  'Strobe':                '⚡',
+  'Strobe Red':            '🔴',
+  'Cylon':                 '👁️',
+  'KITT':                  '🚗',
+  'Halloween Eyes':        '🎃',
+  'Twinkle':               '⭐',
+  'Random Twinkle':        '🎨',
+  'Snow Sparkle':          '❄️',
+  'Running Lights':        '🏃',
+  'Running Lights Green':  '🌿',
+  'Color Wipe Red':        '🟥',
+  'Color Wipe Green':      '🟩',
+  'Color Wipe Blue':       '🟦',
+  'Theatre Chase':         '🎭',
+  'Theatre Chase Rainbow': '🎪',
+  'Fire':                  '🔥',
+  'Bouncing Balls':        '🎱',
+  'Meteor Rain':           '☄️',
+  'Solid Red':             '🔴',
+  'Solid Green':           '🟢',
+  'Solid Blue':            '🔵',
+  'Solid White':           '⬜',
+};
+
+const effectLabel = (name) => EFFECT_ICONS[name] ? `${EFFECT_ICONS[name]} ${name}` : name;
+
 const api = async (action, extra = {}) => {
   try {
     const res = await fetch('/api/command', {
@@ -154,7 +185,7 @@ const renderState = (state) => {
     dot.classList.add('stopped');
     label.textContent = 'Stopped';
   }
-  effect.textContent = state.current_effect || '';
+  effect.textContent = state.current_effect ? effectLabel(state.current_effect) : '';
 
   // Populate effect dropdowns (once)
   if (!lastState || lastState.effects.length !== state.effects.length) {
@@ -165,7 +196,7 @@ const renderState = (state) => {
       state.effects.forEach((name) => {
         const opt = document.createElement('option');
         opt.value = name;
-        opt.textContent = name;
+        opt.textContent = effectLabel(name);
         sel.appendChild(opt);
       });
       if (prev) sel.value = prev;
@@ -181,7 +212,7 @@ const renderState = (state) => {
           <span class="item-drag" title="Drag to reorder">⠿</span>
           <span class="item-dot"></span>
           <span class="item-num">${i + 1}</span>
-          <span class="item-name">${name}</span>
+          <span class="item-name">${effectLabel(name)}</span>
           <button class="item-remove" title="Remove">✕</button>
         </div>`;
       })
