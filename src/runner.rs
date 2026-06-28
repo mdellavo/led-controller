@@ -693,7 +693,6 @@ fn run_loop(
         let fps_elapsed = fps_window.elapsed();
         if fps_elapsed >= Duration::from_secs(5) {
             let fps_val = fps_frames as f32 / fps_elapsed.as_secs_f32();
-            tracing::info!("fps: {:.1}", fps_val);
             fps_frames = 0;
             fps_window = Instant::now();
             if let Ok(mut s) = shared.lock() {
