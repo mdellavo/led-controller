@@ -1,6 +1,6 @@
 use std::time::Duration;
 use rand::Rng;
-use crate::effects::{Effect, Buffer};
+use crate::effects::{Effect, Buffer, fade_buffer};
 use crate::pixels::Color;
 
 struct Spark {
@@ -46,10 +46,8 @@ impl Effect for RandomFadeEffect {
             });
         }
 
-        // decay all pixels slightly each frame
-        for pixel in buffer.iter_mut() {
-            *pixel = pixel.map(|c| (c as f32 * 0.90) as u8);
-        }
+        // decay all pixels — delta-time correct, equivalent to * 0.90 per frame at 60 fps
+        fade_buffer(buffer, 0.90_f32.powf(60.0), dt);
 
         self.sparks.retain_mut(|spark| {
             spark.life += dt;
