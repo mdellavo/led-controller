@@ -159,6 +159,16 @@ speedSlider.addEventListener('input', () => {
   fadeDebouncers['speed'] = setTimeout(() => api('set_speed', { value: v }), 150);
 });
 
+// Brightness slider
+const brightnessSlider = document.getElementById('brightness');
+const brightnessVal = document.getElementById('brightness-val');
+brightnessSlider.addEventListener('input', () => {
+  const v = parseFloat(brightnessSlider.value);
+  brightnessVal.textContent = Math.round(v * 100) + '%';
+  clearTimeout(fadeDebouncers['brightness']);
+  fadeDebouncers['brightness'] = setTimeout(() => api('set_brightness', { value: v }), 150);
+});
+
 const effectDurSlider = document.getElementById('effect-duration');
 const effectDurVal = document.getElementById('effect-duration-val');
 const fmtDuration = (ms) => ms === 0 ? '∞' : ms >= 60000
@@ -239,6 +249,8 @@ const renderState = (state) => {
     effectDurVal.textContent = fmtDuration(state.effect_duration_ms);
     speedSlider.value = state.speed;
     speedVal.textContent = parseFloat(state.speed).toFixed(1) + '×';
+    brightnessSlider.value = state.brightness;
+    brightnessVal.textContent = Math.round(parseFloat(state.brightness) * 100) + '%';
   }
 };
 

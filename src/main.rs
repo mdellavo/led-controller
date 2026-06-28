@@ -56,6 +56,10 @@ struct Args {
     /// Effect speed multiplier (0.1 = very slow, 1.0 = normal, 4.0 = very fast)
     #[arg(long, default_value_t = 1.0)]
     speed: f32,
+
+    /// Software brightness scale 0.0–1.0 applied to all pixel output
+    #[arg(long, default_value_t = 1.0)]
+    brightness_scale: f32,
 }
 
 #[tokio::main]
@@ -97,6 +101,7 @@ async fn main() -> anyhow::Result<()> {
         crossfade_ms: args.crossfade_ms,
         effect_duration_ms: args.effect_duration_ms,
         speed: args.speed,
+        brightness: args.brightness_scale,
     };
     let runner = Runner::new(pixels, registry, config);
 

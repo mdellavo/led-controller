@@ -155,6 +155,7 @@ pub enum Command {
     RemoveFromPlaylist(usize),
     MoveInPlaylist(usize, usize),
     SetSpeed(f32),
+    SetBrightness(f32),
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -171,6 +172,8 @@ pub struct SharedState {
     /// 0 = run indefinitely until manually advanced
     pub effect_duration_ms: u64,
     pub speed: f32,
+    /// Software brightness scale 0.0–1.0 applied to output before writing to hardware
+    pub brightness: f32,
 }
 
 // --------------------------------------------------------------------------
@@ -184,12 +187,13 @@ pub struct RunnerConfig {
     /// 0 = run indefinitely until manually advanced
     pub effect_duration_ms: u64,
     pub speed: f32,
+    pub brightness: f32,
 }
 
 impl Default for RunnerConfig {
     fn default() -> Self {
         let ms = DEFAULT_FADE_DURATION.as_millis() as u64;
-        Self { fade_in_ms: ms, fade_out_ms: ms, crossfade_ms: ms, effect_duration_ms: 0, speed: 1.0 }
+        Self { fade_in_ms: ms, fade_out_ms: ms, crossfade_ms: ms, effect_duration_ms: 0, speed: 1.0, brightness: 1.0 }
     }
 }
 
@@ -205,6 +209,7 @@ impl Runner {
         let (tx, rx) = std::sync::mpsc::sync_channel(32);
 
         let speed = Arc::new(AtomicU32::new(config.speed.to_bits()));
+        let brightness = Arc::new(AtomicU32::new(config.brightness.to_bits()));
 
         let initial_playlist = registry.names().to_vec();
         let effects_list = registry.names().to_vec();
@@ -220,12 +225,13 @@ impl Runner {
             crossfade_ms: config.crossfade_ms,
             effect_duration_ms: config.effect_duration_ms,
             speed: config.speed,
+            brightness: config.brightness,
         }));
 
         let state_clone = Arc::clone(&shared_state);
 
         thread::spawn(move || {
-            run_loop(pixels, registry, rx, num_pixels, state_clone, config, speed);
+            run_loop(pixels, registry, rx, num_pixels, state_clone, config, speed, brightness);
         });
 
         Self {
@@ -274,6 +280,7 @@ fn run_loop(
     shared: Arc<Mutex<SharedState>>,
     config: RunnerConfig,
     speed: Arc<AtomicU32>,
+    brightness: Arc<AtomicU32>,
 ) {
     let black = vec![[0u8; 3]; num_pixels];
     let mut state = RunnerState::Idle;
@@ -397,6 +404,11 @@ fn run_loop(
                     let clamped = s.clamp(0.1, 10.0);
                     speed.store(clamped.to_bits(), Ordering::Relaxed);
                     if let Ok(mut st) = shared.lock() { st.speed = clamped; }
+                }
+                Command::SetBrightness(b) => {
+                    let clamped = b.clamp(0.0, 1.0);
+                    brightness.store(clamped.to_bits(), Ordering::Relaxed);
+                    if let Ok(mut st) = shared.lock() { st.brightness = clamped; }
                 }
 
                 Command::Start => {
@@ -522,8 +534,10 @@ fn run_loop(
         }
 
         // --- write to hardware ---
+        let bri = f32::from_bits(brightness.load(Ordering::Relaxed));
         for (i, color) in output.iter().enumerate() {
-            pixels.set(i, *color);
+            let c = color.map(|v| (v as f32 * bri) as u8);
+            pixels.set(i, c);
         }
         pixels.show();
 

@@ -89,6 +89,7 @@ pub async fn post_command(
             _ => None,
         },
         "set_speed" => req.value.map(Command::SetSpeed),
+        "set_brightness" => req.value.map(Command::SetBrightness),
         _ => None,
     };
 
