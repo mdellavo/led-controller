@@ -135,6 +135,7 @@ App flags (after `--`, passed through to the binary):
 | `--crossfade-ms <n>` | `3000` | Crossfade duration in milliseconds |
 | `--effect-duration-ms <n>` | `0` | Time each effect plays before auto-advancing (0 = infinite) |
 | `--color-order <str>` | `rgb` | Physical color channel order of the strip (e.g. `rgb`, `grb`, `bgr`) |
+| `--speed <n>` | `1.0` | Effect speed multiplier (0.1 = very slow, 1.0 = normal, 4.0 = very fast) |
 
 ### On the Raspberry Pi
 
@@ -185,6 +186,7 @@ Options:
       --crossfade-ms <CROSSFADE_MS>          Crossfade duration in milliseconds [default: 3000]
       --effect-duration-ms <EFFECT_DUR_MS>   Time per effect before auto-advancing (0 = infinite) [default: 0]
       --color-order <COLOR_ORDER>            Physical color channel order of the strip [default: rgb]
+      --speed <SPEED>                        Effect speed multiplier [default: 1.0]
   -h, --help                                 Print help
 ```
 
@@ -206,6 +208,7 @@ Open `http://<pi-ip>:3000` in a browser.
 | **Controls** | Start, Next, Stop |
 | **Select Effect** | Dropdown of all registered effects + Play button to jump to it immediately |
 | **Playlist** | Ordered list of effects to cycle through. Drag `⠿` to reorder, click `✕` to remove, click effect name to play it. Dropdown + **Add** to append any effect. **Shuffle** to randomise order. |
+| **Speed** | Multiplier applied to every effect's time delta (0.1× – 4.0×, live) |
 | **Effect Duration** | How long each effect plays before auto-advancing (0 = manual only) |
 | **Transition Durations** | Separate sliders for fade-in, crossfade, and fade-out |
 
@@ -250,7 +253,8 @@ All endpoints accept/return JSON.
   "fade_in_ms": 3000,
   "fade_out_ms": 3000,
   "crossfade_ms": 3000,
-  "effect_duration_ms": 30000
+  "effect_duration_ms": 30000,
+  "speed": 1.0
 }
 ```
 
@@ -259,7 +263,7 @@ All endpoints accept/return JSON.
 ### `POST /api/command`
 
 ```json
-{ "action": "<action>", "effect": "<name>", "value_ms": 2000, "index": 0, "to_index": 3 }
+{ "action": "<action>", "effect": "<name>", "value_ms": 2000, "value": 1.5, "index": 0, "to_index": 3 }
 ```
 
 | Action | Extra fields | Description |
@@ -276,6 +280,7 @@ All endpoints accept/return JSON.
 | `set_fade_out` | `value_ms` | Set fade-out duration |
 | `set_crossfade` | `value_ms` | Set crossfade duration |
 | `set_effect_duration` | `value_ms` | Set per-effect play time (0 = infinite) |
+| `set_speed` | `value` | Set speed multiplier (float, 0.1–4.0) |
 
 ## Adding an effect
 
