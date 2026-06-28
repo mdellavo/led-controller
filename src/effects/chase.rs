@@ -44,15 +44,11 @@ impl Effect for ChaseEffect {
             *pixel = [0, 0, 0];
         }
 
-        let [r, g, b] = self.color;
+        let n = self.num_pixels as f32;
         for i in 0..self.tail_length {
-            let idx = (self.position as isize - i as isize).rem_euclid(self.num_pixels as isize) as usize;
+            let tail_pos = (self.position - i as f32).rem_euclid(n);
             let brightness = 1.0 - (i as f32 / self.tail_length as f32);
-            buffer[idx] = [
-                (r as f32 * brightness) as u8,
-                (g as f32 * brightness) as u8,
-                (b as f32 * brightness) as u8,
-            ];
+            crate::effects::plot(buffer, tail_pos, self.color, brightness);
         }
 
         true

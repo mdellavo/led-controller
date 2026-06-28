@@ -1,5 +1,5 @@
 use std::time::Duration;
-use crate::effects::{Effect, Buffer};
+use crate::effects::{Effect, Buffer, plot};
 use crate::pixels::Color;
 
 const DEFAULT_COLORS: &[Color] = &[
@@ -72,11 +72,9 @@ impl Effect for BouncingBallsEffect {
                 }
             }
 
-            // clamp height to [0, 1]
             ball.height = ball.height.clamp(0.0, 1.0);
-            let idx = ((1.0 - ball.height) * (n - 1) as f32) as usize;
-            let idx = idx.min(n - 1);
-            buffer[idx] = ball.color;
+            let pos = (1.0 - ball.height) * (n - 1) as f32;
+            plot(buffer, pos, ball.color, 1.0);
         }
 
         true

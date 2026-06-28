@@ -4,6 +4,43 @@ use crate::pixels::Color;
 
 pub type Buffer = Vec<Color>;
 
+// --------------------------------------------------------------------------
+// Drawing helpers — used by individual effects
+// --------------------------------------------------------------------------
+
+/// Additively blend `src * alpha` into `dst`, clamping each channel to 255.
+#[inline]
+pub fn blend_add(dst: &mut Color, src: Color, alpha: f32) {
+    for (d, s) in dst.iter_mut().zip(src.iter()) {
+        *d = (*d as f32 + *s as f32 * alpha).min(255.0) as u8;
+    }
+}
+
+/// Draw a point light at a sub-pixel float position.
+/// Splits brightness between the two adjacent LEDs by the fractional part
+/// (linear interpolation / antialiasing). Additively blends so multiple
+/// sources accumulate correctly in the same buffer.
+pub fn plot(buffer: &mut Buffer, pos: f32, color: Color, alpha: f32) {
+    let n = buffer.len();
+    if n == 0 || pos < 0.0 || pos >= n as f32 { return; }
+    let lo = pos.floor() as usize;
+    let frac = pos.fract();
+    blend_add(&mut buffer[lo], color, alpha * (1.0 - frac));
+    if lo + 1 < n {
+        blend_add(&mut buffer[lo + 1], color, alpha * frac);
+    }
+}
+
+/// Multiply every channel of every pixel by `per_second.powf(dt)`.
+/// Use this instead of a fixed per-frame multiplier so the decay rate is
+/// independent of frame rate and speed scaling.
+pub fn fade_buffer(buffer: &mut Buffer, per_second: f32, dt: f32) {
+    let factor = per_second.powf(dt);
+    for pixel in buffer.iter_mut() {
+        *pixel = pixel.map(|c| (c as f32 * factor) as u8);
+    }
+}
+
 pub trait Effect: Send + 'static {
     fn name(&self) -> &'static str;
     /// Update the pixel buffer for one frame. Return false to signal natural completion.
