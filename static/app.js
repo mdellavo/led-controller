@@ -118,6 +118,12 @@ document.getElementById('btn-add-to-playlist').onclick = () => {
   if (name) api('add_to_playlist', { effect: name });
 };
 
+// Add all effects to playlist
+document.getElementById('btn-add-all').onclick = () => api('add_all_to_playlist');
+
+// Clear playlist
+document.getElementById('btn-clear-playlist').onclick = () => api('clear_playlist');
+
 // --------------------------------------------------------------------------
 // Playlist — drag-to-reorder, click-to-play, remove button
 // --------------------------------------------------------------------------

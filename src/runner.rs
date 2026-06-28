@@ -196,6 +196,8 @@ pub enum Command {
     SetCrossfadeMs(u64),
     SetEffectDurationMs(u64),
     AddToPlaylist(String),
+    AddAllToPlaylist,
+    ClearPlaylist,
     RemoveFromPlaylist(usize),
     MoveInPlaylist(usize, usize),
     SetSpeed(f32),
@@ -526,6 +528,20 @@ fn run_loop(
                     if registry.contains(&name) {
                         playlist.push(name.clone());
                         if let Ok(mut s) = shared.lock() { s.playlist.push(name); }
+                    }
+                }
+                Command::AddAllToPlaylist => {
+                    for name in registry.names() {
+                        playlist.push(name.clone());
+                    }
+                    if let Ok(mut s) = shared.lock() { s.playlist = playlist.clone(); }
+                }
+                Command::ClearPlaylist => {
+                    playlist.clear();
+                    playlist_index = 0;
+                    if let Ok(mut s) = shared.lock() {
+                        s.playlist = vec![];
+                        s.playlist_index = 0;
                     }
                 }
                 Command::RemoveFromPlaylist(idx) => {
