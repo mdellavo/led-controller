@@ -66,8 +66,10 @@ impl EffectRegistry {
     where
         F: Fn() -> Box<dyn Effect> + Send + Sync + 'static,
     {
+        if !self.factories.contains_key(name) {
+            self.order.push(name.to_string());
+        }
         self.factories.insert(name.to_string(), Box::new(factory));
-        self.order.push(name.to_string());
     }
 
     pub fn create(&self, name: &str) -> Option<Box<dyn Effect>> {

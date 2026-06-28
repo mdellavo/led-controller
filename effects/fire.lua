@@ -1,52 +1,66 @@
-name = "Lua Fire"
+name = "Fire"
 
--- Classic fire simulation: heat diffuses upward and cools downward.
--- Each cell is a heat value 0–255 mapped to a black→red→yellow→white palette.
+-- Faithful port of Rust FireEffect: integer heat 0-255, same cooling/sparking/diffusion.
+local cooling = 55
+local sparking = 120  -- threshold out of 255
+local speed_ms = 15.0
 
 local heat = {}
+local timer = 0.0
 
 function init(n)
-    for i = 0, n - 1 do heat[i] = 0 end
+    heat = {}
+    for i = 1, n do heat[i] = 0 end
+    timer = 0.0
 end
 
-local function palette(t)
-    -- t: 0.0 (black) → 1.0 (white) via red → orange → yellow
-    if t < 0.33 then
-        return math.floor(t / 0.33 * 255), 0, 0
-    elseif t < 0.66 then
-        local f = (t - 0.33) / 0.33
-        return 255, math.floor(f * 160), 0
+local function heat_to_color(h)
+    if h < 85 then
+        return h * 3, 0, 0
+    elseif h < 170 then
+        local t = h - 85
+        return 255, t * 3, 0
     else
-        local f = (t - 0.66) / 0.34
-        return 255, math.floor(160 + f * 95), math.floor(f * 255)
+        local t = h - 170
+        return 255, 255, t * 3
     end
 end
 
 function update(buf, dt)
     local n = buf:len()
-    local cooling  = 55 * dt
-    local sparking = 0.5  -- probability per pixel at base
+    timer = timer + dt * 1000.0
 
-    -- Cool every cell
-    for i = 0, n - 1 do
-        heat[i] = math.max(0, heat[i] - math.random() * cooling)
+    if timer < speed_ms then
+        for i = 1, n do
+            local r, g, b = heat_to_color(heat[i])
+            buf:set(i - 1, r, g, b)
+        end
+        return true
+    end
+    timer = timer - speed_ms
+
+    -- Step 1: cool down every cell by a random amount
+    local cool_max = math.floor(cooling * 10 / n) + 2
+    for i = 1, n do
+        local cool = math.random(0, cool_max)
+        heat[i] = math.max(0, heat[i] - cool)
     end
 
-    -- Diffuse heat upward (toward index 0)
-    for i = n - 1, 2, -1 do
-        heat[i] = (heat[i - 1] + heat[i - 2] + heat[i - 2]) / 3.0
+    -- Step 2: diffuse heat upward (index 1 = base/hot, index n = top/cool)
+    for i = n, 3, -1 do
+        heat[i] = math.floor((heat[i - 1] + heat[i - 2] + heat[i - 2]) / 3)
     end
 
-    -- Randomly ignite sparks at the base
-    if math.random() < sparking then
-        local y = math.random(0, math.min(7, n - 1))
-        heat[y] = math.min(1.0, heat[y] + math.random() * 0.6 + 0.2)
+    -- Step 3: ignite sparks near the base
+    if math.random(0, 255) < sparking then
+        local y = math.random(1, math.min(7, n))
+        heat[y] = math.min(255, heat[y] + math.random(160, 255))
     end
 
-    -- Map heat to colour and write buffer
-    for i = 0, n - 1 do
-        local r, g, b = palette(heat[i])
-        buf:set(n - 1 - i, r, g, b)   -- base at the bottom (high index)
+    -- Step 4: map heat to colour
+    for i = 1, n do
+        local r, g, b = heat_to_color(heat[i])
+        buf:set(i - 1, r, g, b)
     end
 
     return true

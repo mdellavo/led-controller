@@ -1,27 +1,26 @@
-name = "Lua Rainbow"
+name = "Rainbow"
 
 local hue = 0.0
 
-local function hsv(h, s, v)
-    local i = math.floor(h * 6) % 6
-    local f = h * 6 - math.floor(h * 6)
-    local p = v * (1 - s)
-    local q = v * (1 - f * s)
-    local t = v * (1 - (1 - f) * s)
-    if i == 0 then return v, t, p
-    elseif i == 1 then return q, v, p
-    elseif i == 2 then return p, v, t
-    elseif i == 3 then return p, q, v
-    elseif i == 4 then return t, p, v
-    else return v, p, q end
+local function colorwheel(pos)
+    pos = (255 - pos) % 256
+    if pos < 85 then
+        return 255 - pos * 3, 0, pos * 3
+    elseif pos < 170 then
+        pos = pos - 85
+        return 0, pos * 3, 255 - pos * 3
+    else
+        pos = pos - 170
+        return pos * 3, 255 - pos * 3, 0
+    end
 end
 
 function update(buf, dt)
     local n = buf:len()
+    hue = (hue + dt * 50.0) % 256.0
     for i = 0, n - 1 do
-        local r, g, b = hsv((hue + i / n) % 1.0, 1.0, 1.0)
-        buf:set(i, math.floor(r * 255), math.floor(g * 255), math.floor(b * 255))
+        local r, g, b = colorwheel(math.floor(hue + i * 256 / n) % 256)
+        buf:set(i, r, g, b)
     end
-    hue = (hue + dt * 0.08) % 1.0
     return true
 end

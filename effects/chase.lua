@@ -1,26 +1,41 @@
-name = "Lua Chase"
-
--- Comet with an antialiased head and a fading tail.
--- Demonstrates buf:plot() for sub-pixel motion and buf:fade() for trails.
+name = "Chase"
 
 local pos = 0.0
-local speed = 40.0   -- pixels per second
-local tail  = 12     -- tail length in pixels
-local r, g, b = 255, 60, 0
+local prev_pos = 0.0
+local tail_length = 3
+local speed = 0.0
+local r, g, b = 255, 0, 0
 
 function init(n)
+    tail_length = math.max(3, math.floor(n / 6))
+    speed = n * 1.5
+    r = math.random(0, 255)
+    g = math.random(0, 255)
+    b = math.random(0, 255)
     pos = 0.0
-    r = math.random(100, 255)
-    g = math.random(0,   80)
-    b = math.random(100, 255)
+    prev_pos = 0.0
 end
 
 function update(buf, dt)
-    buf:fade(0.12, dt)
-    for i = 0, tail - 1 do
-        local brightness = (tail - i) / tail
-        buf:plot(pos - i, r, g, b, brightness)
+    local n = buf:len()
+    local new_pos = (pos + speed * dt) % n
+
+    -- wrap-around: pick a new random color
+    if new_pos < prev_pos then
+        r = math.random(0, 255)
+        g = math.random(0, 255)
+        b = math.random(0, 255)
     end
-    pos = (pos + dt * speed) % buf:len()
+
+    prev_pos = pos
+    pos = new_pos
+
+    buf:clear()
+    for i = 0, tail_length - 1 do
+        local tail_pos = (pos - i) % n
+        local brightness = 1.0 - i / tail_length
+        buf:plot(tail_pos, r, g, b, brightness)
+    end
+
     return true
 end
