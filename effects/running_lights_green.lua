@@ -1,4 +1,5 @@
 name = "Running Lights Green"
+description = "Green sine-wave brightness ripples continuously down the strip"
 
 local rl_r, rl_g, rl_b = 0, 255, 0
 local speed    = 1.0

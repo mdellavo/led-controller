@@ -1,4 +1,5 @@
 name = "Halloween Eyes"
+description = "A pair of red eyes appears at a random position, holds, fades out, then reappears elsewhere"
 
 local eye_color   = {255, 0, 0}
 local eye_width   = 1

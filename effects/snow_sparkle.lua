@@ -1,4 +1,5 @@
 name = "Snow Sparkle"
+description = "Dim white background with a single bright sparkle that jumps to a new position every 200ms"
 
 local bg_r, bg_g, bg_b         = 20, 20, 20
 local spark_r, spark_g, spark_b = 255, 255, 255

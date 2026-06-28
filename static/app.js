@@ -29,6 +29,14 @@ const EFFECT_ICONS = {
 
 const effectLabel = (name) => EFFECT_ICONS[name] ? `${EFFECT_ICONS[name]} ${name}` : name;
 
+const updateEffectHint = () => {
+  const sel = document.getElementById('effect-select');
+  const opt = sel.options[sel.selectedIndex];
+  document.getElementById('effect-hint').textContent = opt?.dataset?.description || '';
+};
+
+document.getElementById('effect-select').addEventListener('change', updateEffectHint);
+
 const api = async (action, extra = {}) => {
   try {
     const res = await fetch('/api/command', {
@@ -264,7 +272,7 @@ const renderState = (state) => {
   }
   effect.textContent = state.current_effect ? effectLabel(state.current_effect) : '';
 
-  // Populate effect dropdowns (once)
+  // Populate effect dropdowns (once, or when effect list changes)
   if (!lastState || lastState.effects.length !== state.effects.length) {
     ['effect-select', 'playlist-add-select'].forEach((id) => {
       const sel = document.getElementById(id);
@@ -274,10 +282,13 @@ const renderState = (state) => {
         const opt = document.createElement('option');
         opt.value = name;
         opt.textContent = effectLabel(name);
+        const desc = (state.effect_descriptions || {})[name];
+        if (desc) opt.dataset.description = desc;
         sel.appendChild(opt);
       });
       if (prev) sel.value = prev;
     });
+    updateEffectHint();
   }
 
   // Playlist — skip re-render during drag to avoid interrupting the interaction

@@ -1,4 +1,5 @@
 name = "Bouncing Balls"
+description = "Three balls (red, green, blue) bounce under simulated gravity with energy loss on each bounce"
 
 local DEFAULT_COLORS = {{255, 0, 0}, {0, 255, 0}, {0, 0, 255}}
 

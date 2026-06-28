@@ -1,4 +1,5 @@
 name = "Random Fade"
+description = "Sparks of random color ignite at random positions, ramp up to peak brightness, then fade out"
 
 local sparks = {}
 local spawn_timer = 0.0

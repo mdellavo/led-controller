@@ -1,4 +1,5 @@
 name = "Fire"
+description = "Heat-diffusion simulation: base glows hot, heat rises upward through a black→red→yellow→white palette"
 
 -- Faithful port of Rust FireEffect: integer heat 0-255, same cooling/sparking/diffusion.
 local cooling = 55

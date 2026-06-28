@@ -348,6 +348,15 @@
       .item-remove:hover { color: var(--red); }
     }
 
+    /* Effect description hint */
+    .effect-hint {
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      margin-top: 0.5rem;
+      line-height: 1.4;
+      min-height: 1.1em;
+    }
+
     /* Error toast */
     #error-toast {
       position: fixed;
@@ -395,6 +404,7 @@
         <select id="effect-select"></select>
         <button class="btn-primary" id="btn-play-selected" style="flex:0;white-space:nowrap">Play</button>
       </div>
+      <p class="effect-hint" id="effect-hint"></p>
     </div>
 
     <!-- Playlist -->

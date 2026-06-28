@@ -1,4 +1,5 @@
 name = "Breathing"
+description = "All pixels pulse in and out on a slow breathing rhythm using a sin² envelope"
 
 -- All pixels pulse in and out like the Apple sleep indicator.
 -- Uses sin^2 so the strip spends more time near dark (natural breathing rhythm).

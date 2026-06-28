@@ -1,4 +1,5 @@
 name = "Twinkle"
+description = "Ten white pixels reposition randomly every 100ms"
 
 local tw_r, tw_g, tw_b = 255, 255, 255
 local count    = 10

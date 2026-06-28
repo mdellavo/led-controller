@@ -213,6 +213,7 @@ pub struct SharedState {
     pub playlist: Vec<String>,
     pub playlist_index: usize,
     pub effects: Vec<String>,
+    pub effect_descriptions: std::collections::HashMap<String, String>,
     pub fade_in_ms: u64,
     pub fade_out_ms: u64,
     pub crossfade_ms: u64,
@@ -292,8 +293,9 @@ impl Runner {
             Some(pl) => pl.iter().filter(|n| registry.contains(n)).cloned().collect(),
             None => registry.names().to_vec(),
         };
-        let effects_list    = registry.names().to_vec();
-        let color_order_str = config.color_order.to_string();
+        let effects_list        = registry.names().to_vec();
+        let effect_descriptions = registry.descriptions().clone();
+        let color_order_str     = config.color_order.to_string();
 
         let initial_playlist_index = config.initial_playlist_index
             .min(initial_playlist.len().saturating_sub(1));
@@ -305,6 +307,7 @@ impl Runner {
             playlist: initial_playlist,
             playlist_index: initial_playlist_index,
             effects: effects_list,
+            effect_descriptions,
             fade_in_ms: config.fade_in_ms,
             fade_out_ms: config.fade_out_ms,
             crossfade_ms: config.crossfade_ms,
@@ -473,6 +476,7 @@ fn run_loop(
                     if let Ok(mut st) = shared.lock() {
                         st.num_pixels = n;
                         st.effects = registry.names().to_vec();
+                        st.effect_descriptions = registry.descriptions().clone();
                         st.playlist = playlist.clone();
                         st.playlist_index = 0;
                     }

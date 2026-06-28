@@ -1,4 +1,5 @@
 name = "Random Twinkle"
+description = "Ten random-colored pixels reposition randomly every 100ms"
 
 local count    = 10
 local speed_ms = 100.0

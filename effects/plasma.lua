@@ -1,4 +1,5 @@
 name = "Plasma"
+description = "Four sine waves at different spatial and temporal frequencies combine into a shifting colorwheel interference pattern"
 
 -- Four overlapping sine waves at different spatial frequencies and speeds
 -- sum into a continuously shifting interference pattern mapped to hue.

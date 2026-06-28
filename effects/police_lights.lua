@@ -1,4 +1,5 @@
 name = "Police Lights"
+description = "Alternating red/blue half-strip strobes with a brief white center flash between each side"
 
 -- Alternating red/blue half-strip strobes with a brief white center flash between sides.
 local cycle_ms = 600.0

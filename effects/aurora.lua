@@ -1,4 +1,5 @@
 name = "Aurora"
+description = "Four overlapping sine-wave bands of green, teal, blue, and purple shimmer at independent speeds"
 
 -- Four overlapping sine-wave bands in cool aurora colors (greens, teals, blues, purples).
 -- Each band has its own speed and spatial frequency, creating a living shimmer.

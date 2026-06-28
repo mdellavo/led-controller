@@ -1,4 +1,5 @@
 name = "Lightning"
+description = "Random white strikes flare across the strip, then fade into a flickering blue-white afterglow"
 
 -- Idle → blinding white strike → flickering blue-white afterglow → idle.
 -- Random delay between strikes keeps it unpredictable.

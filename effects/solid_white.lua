@@ -1,4 +1,5 @@
 name = "Solid White"
+description = "Solid static warm white"
 
 function update(buf, dt)
     local n = buf:len()

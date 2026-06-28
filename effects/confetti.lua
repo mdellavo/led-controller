@@ -1,4 +1,5 @@
 name = "Confetti"
+description = "Saturated random-hue dots scatter onto a slowly decaying background"
 
 -- Saturated random-hue dots scattered each frame onto a decaying background.
 local spawn_rate = 20.0  -- new dots per second

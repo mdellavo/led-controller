@@ -1,4 +1,5 @@
 name = "Theatre Chase Rainbow"
+description = "Theatre chase with a different colorwheel hue on each lit pixel, advancing with every step"
 
 local speed_ms   = 100.0
 local phase      = 0

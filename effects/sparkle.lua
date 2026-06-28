@@ -1,4 +1,5 @@
 name = "Sparkle"
+description = "Pixels independently ramp to a random peak brightness then fade back to dark"
 
 -- Per-pixel brightness with smooth ramp-up then ramp-down, matching Rust SparkleEffect.
 local brightness = {}

@@ -1,4 +1,5 @@
 name = "Juggle"
+description = "Six differently-colored dots bounce at staggered speeds; their fading trails overlap and blend"
 
 -- Six dots bouncing back and forth at slightly different speeds, each a different hue.
 -- Trails overlap and mix as they cross, creating complex moving color patterns.

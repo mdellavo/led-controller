@@ -1,4 +1,5 @@
 name = "Sinelon"
+description = "A single dot rides a sine wave back and forth leaving a fading magenta trail"
 
 -- A single dot rides a sine wave back and forth, leaving a fading trail.
 -- Smoother and more graceful than Cylon's linear bounce.

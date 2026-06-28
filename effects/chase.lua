@@ -1,4 +1,5 @@
 name = "Chase"
+description = "Antialiased comet with a tail proportional to strip length; picks a new random color each lap"
 
 local pos = 0.0
 local prev_pos = 0.0

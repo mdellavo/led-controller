@@ -1,4 +1,5 @@
 name = "Rainbow"
+description = "Colorwheel hue shifts pixel-to-pixel across the strip, cycling through all colors continuously"
 
 local hue = 0.0
 

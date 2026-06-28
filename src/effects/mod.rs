@@ -52,6 +52,7 @@ pub type EffectFactory = Box<dyn Fn() -> Box<dyn Effect> + Send + Sync>;
 pub struct EffectRegistry {
     factories: HashMap<String, EffectFactory>,
     order: Vec<String>,
+    descriptions: HashMap<String, String>,
 }
 
 impl EffectRegistry {
@@ -59,6 +60,7 @@ impl EffectRegistry {
         Self {
             factories: HashMap::new(),
             order: Vec::new(),
+            descriptions: HashMap::new(),
         }
     }
 
@@ -70,6 +72,14 @@ impl EffectRegistry {
             self.order.push(name.to_string());
         }
         self.factories.insert(name.to_string(), Box::new(factory));
+    }
+
+    pub fn set_description(&mut self, name: &str, desc: String) {
+        self.descriptions.insert(name.to_string(), desc);
+    }
+
+    pub fn descriptions(&self) -> &HashMap<String, String> {
+        &self.descriptions
     }
 
     pub fn create(&self, name: &str) -> Option<Box<dyn Effect>> {
@@ -125,7 +135,8 @@ pub fn load_lua_effects(dir: &std::path::Path, num_pixels: usize, registry: &mut
                 continue;
             }
         };
-        let name = lua_effect::LuaEffect::probe_name(&source)
+        let (probed_name, description) = lua_effect::LuaEffect::probe_metadata(&source);
+        let name = probed_name
             .or_else(|| path.file_stem().map(|s| s.to_string_lossy().into_owned()))
             .unwrap_or_else(|| "Lua Effect".to_string());
         // Leak the name once — effect names are 'static in the Effect trait.
@@ -134,6 +145,9 @@ pub fn load_lua_effects(dir: &std::path::Path, num_pixels: usize, registry: &mut
             "loaded Lua effect {:?}: {static_name}",
             path.file_name().unwrap_or_default()
         );
+        if let Some(desc) = description {
+            registry.set_description(static_name, desc);
+        }
         registry.register(static_name, {
             let src = source.clone();
             move || Box::new(lua_effect::LuaEffect::new(static_name, src.clone(), num_pixels))

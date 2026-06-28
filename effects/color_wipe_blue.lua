@@ -1,4 +1,5 @@
 name = "Color Wipe Blue"
+description = "Fills the strip blue one pixel at a time from one end, then clears it the same way"
 
 local cw_r, cw_g, cw_b = 0, 0, 255
 local speed_ms = 20.0

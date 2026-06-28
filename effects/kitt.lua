@@ -1,4 +1,5 @@
 name = "KITT"
+description = "Twin red eyes start at center, expand outward to the ends, then contract back together"
 
 local color      = {255, 0, 0}
 local eye_size   = 4

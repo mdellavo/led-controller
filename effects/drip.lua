@@ -1,4 +1,5 @@
 name = "Drip"
+description = "Colored drops spawn at one end, accelerate under gravity, and splat at the other end"
 
 -- Colored drops spawn at index 0, accelerate under gravity, and splat at the far end.
 -- The splat leaves a brief bright burst that fades with the rest of the trail.

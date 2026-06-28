@@ -1,4 +1,5 @@
 name = "Meteor Rain"
+description = "White meteor streaks across the strip leaving a randomly-decaying trail, then resets"
 
 local meteor_size  = 10
 local random_decay = true

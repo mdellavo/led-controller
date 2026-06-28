@@ -1,4 +1,5 @@
 name = "Strobe Red"
+description = "Ten rapid red flashes in a burst followed by a 1-second pause, then repeat"
 
 local flash_r, flash_g, flash_b = 255, 0, 0
 local flashes       = 10

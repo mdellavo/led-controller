@@ -123,12 +123,20 @@ impl LuaEffect {
         Self { name, lua }
     }
 
-    /// Run the script in a throw-away VM to read its `name` global.
-    /// Returns None if the script errors or omits `name`.
-    pub fn probe_name(source: &str) -> Option<String> {
+    /// Run the script in a throw-away VM to read its `name` and `description` globals.
+    pub fn probe_metadata(source: &str) -> (Option<String>, Option<String>) {
         let lua = Lua::new();
-        lua.load(source).exec().ok()?;
-        lua.globals().get::<String>("name").ok()
+        if lua.load(source).exec().is_err() {
+            return (None, None);
+        }
+        let name = lua.globals().get::<String>("name").ok();
+        let desc = lua.globals().get::<String>("description").ok();
+        (name, desc)
+    }
+
+    #[allow(dead_code)]
+    pub fn probe_name(source: &str) -> Option<String> {
+        Self::probe_metadata(source).0
     }
 }
 

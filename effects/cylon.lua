@@ -1,4 +1,5 @@
 name = "Cylon"
+description = "Red Larson-scanner eye bounces back and forth with exponential brightness falloff on either side"
 
 local color    = {255, 0, 0}
 local eye_size = 4

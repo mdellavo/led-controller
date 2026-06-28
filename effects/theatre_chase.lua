@@ -1,4 +1,5 @@
 name = "Theatre Chase"
+description = "Every third pixel is lit and steps along the strip in a marching-lights pattern"
 
 local tc_r, tc_g, tc_b = 255, 255, 255
 local speed_ms = 100.0

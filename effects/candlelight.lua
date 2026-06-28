@@ -1,4 +1,5 @@
 name = "Candlelight"
+description = "Warm orange flicker: each pixel drifts toward a random brightness target, with occasional sharp gusts"
 
 -- Each pixel independently wanders toward a random brightness target.
 -- Occasional gusts drop the target low for a realistic flicker.

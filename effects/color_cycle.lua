@@ -1,4 +1,5 @@
 name = "Color Cycle"
+description = "The whole strip slowly cycles through one solid hue at a time"
 
 -- All pixels show the same hue at once, slowly cycling through the wheel.
 -- Slower and moodier than Rainbow — the whole strip breathes one color at a time.
