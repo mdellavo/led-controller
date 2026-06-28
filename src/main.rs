@@ -48,6 +48,10 @@ struct Args {
     /// How long each effect plays before auto-advancing to the next (0 = infinite)
     #[arg(long, default_value_t = 0)]
     effect_duration_ms: u64,
+
+    /// Physical color channel order of the LED strip (e.g. rgb, grb, bgr)
+    #[arg(long, default_value = "rgb")]
+    color_order: String,
 }
 
 #[tokio::main]
@@ -61,6 +65,8 @@ async fn main() -> anyhow::Result<()> {
 
     let args = Args::parse();
 
+    let color_order = pixels::ColorOrder::parse(&args.color_order)?;
+
     let pixels: Box<dyn pixels::PixelStrip> = {
         #[cfg(feature = "hardware")]
         {
@@ -68,14 +74,15 @@ async fn main() -> anyhow::Result<()> {
                 pin = args.gpio_pin,
                 pixels = args.pixels,
                 brightness = args.brightness,
+                color_order = %args.color_order,
                 "initializing hardware LED strip"
             );
-            Box::new(pixels::hardware::NeoPixelStrip::new(args.gpio_pin, args.pixels, args.brightness)?)
+            Box::new(pixels::hardware::NeoPixelStrip::new(args.gpio_pin, args.pixels, args.brightness, color_order)?)
         }
         #[cfg(not(feature = "hardware"))]
         {
-            tracing::info!(pixels = args.pixels, "no hardware feature — using NullPixels (dev mode)");
-            Box::new(NullPixels::new(args.pixels))
+            tracing::info!(pixels = args.pixels, color_order = %args.color_order, "no hardware feature — using NullPixels (dev mode)");
+            Box::new(NullPixels::new(args.pixels, color_order))
         }
     };
 

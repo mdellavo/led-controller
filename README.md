@@ -105,6 +105,7 @@ App flags (after `--`, passed through to the binary):
 | `--fade-out-ms <n>` | `3000` | Fade-out duration in milliseconds |
 | `--crossfade-ms <n>` | `3000` | Crossfade duration in milliseconds |
 | `--effect-duration-ms <n>` | `0` | Time each effect plays before auto-advancing (0 = infinite) |
+| `--color-order <str>` | `rgb` | Physical color channel order of the strip (e.g. `rgb`, `grb`, `bgr`) |
 
 ### On the Raspberry Pi
 
@@ -154,6 +155,7 @@ Options:
       --fade-out-ms <FADE_OUT_MS>            Fade-out duration in milliseconds [default: 3000]
       --crossfade-ms <CROSSFADE_MS>          Crossfade duration in milliseconds [default: 3000]
       --effect-duration-ms <EFFECT_DUR_MS>   Time per effect before auto-advancing (0 = infinite) [default: 0]
+      --color-order <COLOR_ORDER>            Physical color channel order of the strip [default: rgb]
   -h, --help                                 Print help
 ```
 
