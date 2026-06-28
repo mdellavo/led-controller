@@ -136,6 +136,7 @@ App flags (after `--`, passed through to the binary):
 | `--effect-duration-ms <n>` | `0` | Time each effect plays before auto-advancing (0 = infinite) |
 | `--color-order <str>` | `rgb` | Physical color channel order of the strip (e.g. `rgb`, `grb`, `bgr`) |
 | `--speed <n>` | `1.0` | Effect speed multiplier (0.1 = very slow, 1.0 = normal, 4.0 = very fast) |
+| `--brightness-scale <n>` | `1.0` | Software brightness scale 0.0–1.0 applied to all pixel output |
 
 ### On the Raspberry Pi
 
@@ -187,6 +188,7 @@ Options:
       --effect-duration-ms <EFFECT_DUR_MS>   Time per effect before auto-advancing (0 = infinite) [default: 0]
       --color-order <COLOR_ORDER>            Physical color channel order of the strip [default: rgb]
       --speed <SPEED>                        Effect speed multiplier [default: 1.0]
+      --brightness-scale <BRIGHTNESS_SCALE>  Software brightness scale 0.0–1.0 [default: 1.0]
   -h, --help                                 Print help
 ```
 
@@ -209,6 +211,7 @@ Open `http://<pi-ip>:3000` in a browser.
 | **Select Effect** | Dropdown of all registered effects + Play button to jump to it immediately |
 | **Playlist** | Ordered list of effects to cycle through. Drag `⠿` to reorder, click `✕` to remove, click effect name to play it. Dropdown + **Add** to append any effect. **Shuffle** to randomise order. |
 | **Speed** | Multiplier applied to every effect's time delta (0.1× – 4.0×, live) |
+| **Brightness** | Software brightness scale applied to all pixel output (0–100%, live) |
 | **Effect Duration** | How long each effect plays before auto-advancing (0 = manual only) |
 | **Transition Durations** | Separate sliders for fade-in, crossfade, and fade-out |
 
@@ -254,7 +257,8 @@ All endpoints accept/return JSON.
   "fade_out_ms": 3000,
   "crossfade_ms": 3000,
   "effect_duration_ms": 30000,
-  "speed": 1.0
+  "speed": 1.0,
+  "brightness": 1.0
 }
 ```
 
@@ -281,6 +285,7 @@ All endpoints accept/return JSON.
 | `set_crossfade` | `value_ms` | Set crossfade duration |
 | `set_effect_duration` | `value_ms` | Set per-effect play time (0 = infinite) |
 | `set_speed` | `value` | Set speed multiplier (float, 0.1–4.0) |
+| `set_brightness` | `value` | Set software brightness scale (float, 0.0–1.0) |
 
 ## Adding an effect
 
