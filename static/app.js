@@ -149,6 +149,16 @@ setupSlider('fade-in', 'set_fade_in', 'fade-in-val');
 setupSlider('crossfade', 'set_crossfade', 'crossfade-val');
 setupSlider('fade-out', 'set_fade_out', 'fade-out-val');
 
+// Speed slider
+const speedSlider = document.getElementById('speed');
+const speedVal = document.getElementById('speed-val');
+speedSlider.addEventListener('input', () => {
+  const v = parseFloat(speedSlider.value);
+  speedVal.textContent = v.toFixed(1) + '×';
+  clearTimeout(fadeDebouncers['speed']);
+  fadeDebouncers['speed'] = setTimeout(() => api('set_speed', { value: v }), 150);
+});
+
 const effectDurSlider = document.getElementById('effect-duration');
 const effectDurVal = document.getElementById('effect-duration-val');
 const fmtDuration = (ms) => ms === 0 ? '∞' : ms >= 60000
@@ -227,6 +237,8 @@ const renderState = (state) => {
     syncSlider('fade-out', 'fade-out-val', state.fade_out_ms);
     effectDurSlider.value = state.effect_duration_ms;
     effectDurVal.textContent = fmtDuration(state.effect_duration_ms);
+    speedSlider.value = state.speed;
+    speedVal.textContent = parseFloat(state.speed).toFixed(1) + '×';
   }
 };
 

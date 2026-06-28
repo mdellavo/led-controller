@@ -1,5 +1,5 @@
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicU32, Ordering},
     Arc, Mutex,
 };
 use std::thread::{self, JoinHandle};
@@ -26,7 +26,7 @@ pub struct EffectHandle {
 }
 
 impl EffectHandle {
-    pub fn spawn(effect: Box<dyn Effect>, num_pixels: usize) -> Self {
+    pub fn spawn(effect: Box<dyn Effect>, num_pixels: usize, speed: Arc<AtomicU32>) -> Self {
         let name = effect.name().to_string();
         let buffer = Arc::new(Mutex::new(vec![[0u8; 3]; num_pixels]));
         let stop_flag = Arc::new(AtomicBool::new(false));
@@ -42,8 +42,12 @@ impl EffectHandle {
                     break;
                 }
                 let now = Instant::now();
-                let delta = now.duration_since(last);
+                let real_delta = now.duration_since(last);
                 last = now;
+
+                let spd = f32::from_bits(speed.load(Ordering::Relaxed));
+                let scaled_secs = real_delta.as_secs_f32() * spd;
+                let delta = Duration::from_secs_f32(scaled_secs.max(0.0));
 
                 {
                     if let Ok(mut buf) = buf_clone.lock() {
@@ -150,6 +154,7 @@ pub enum Command {
     AddToPlaylist(String),
     RemoveFromPlaylist(usize),
     MoveInPlaylist(usize, usize),
+    SetSpeed(f32),
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -165,6 +170,7 @@ pub struct SharedState {
     pub crossfade_ms: u64,
     /// 0 = run indefinitely until manually advanced
     pub effect_duration_ms: u64,
+    pub speed: f32,
 }
 
 // --------------------------------------------------------------------------
@@ -177,12 +183,13 @@ pub struct RunnerConfig {
     pub crossfade_ms: u64,
     /// 0 = run indefinitely until manually advanced
     pub effect_duration_ms: u64,
+    pub speed: f32,
 }
 
 impl Default for RunnerConfig {
     fn default() -> Self {
         let ms = DEFAULT_FADE_DURATION.as_millis() as u64;
-        Self { fade_in_ms: ms, fade_out_ms: ms, crossfade_ms: ms, effect_duration_ms: 0 }
+        Self { fade_in_ms: ms, fade_out_ms: ms, crossfade_ms: ms, effect_duration_ms: 0, speed: 1.0 }
     }
 }
 
@@ -197,6 +204,8 @@ impl Runner {
         let num_pixels = pixels.len();
         let (tx, rx) = std::sync::mpsc::sync_channel(32);
 
+        let speed = Arc::new(AtomicU32::new(config.speed.to_bits()));
+
         let initial_playlist = registry.names().to_vec();
         let effects_list = registry.names().to_vec();
         let shared_state = Arc::new(Mutex::new(SharedState {
@@ -210,12 +219,13 @@ impl Runner {
             fade_out_ms: config.fade_out_ms,
             crossfade_ms: config.crossfade_ms,
             effect_duration_ms: config.effect_duration_ms,
+            speed: config.speed,
         }));
 
         let state_clone = Arc::clone(&shared_state);
 
         thread::spawn(move || {
-            run_loop(pixels, registry, rx, num_pixels, state_clone, config);
+            run_loop(pixels, registry, rx, num_pixels, state_clone, config, speed);
         });
 
         Self {
@@ -263,6 +273,7 @@ fn run_loop(
     num_pixels: usize,
     shared: Arc<Mutex<SharedState>>,
     config: RunnerConfig,
+    speed: Arc<AtomicU32>,
 ) {
     let black = vec![[0u8; 3]; num_pixels];
     let mut state = RunnerState::Idle;
@@ -275,10 +286,10 @@ fn run_loop(
     let mut effect_duration = config.effect_duration_ms as f32 / 1000.0;
     let mut effect_elapsed: f32 = 0.0;
 
-    let spawn_effect = |playlist: &[String], index: usize, registry: &EffectRegistry| -> Option<EffectHandle> {
+    let spawn_effect = |playlist: &[String], index: usize, registry: &EffectRegistry, speed: Arc<AtomicU32>| -> Option<EffectHandle> {
         let name = playlist.get(index)?.clone();
         let effect = registry.create(&name)?;
-        Some(EffectHandle::spawn(effect, num_pixels))
+        Some(EffectHandle::spawn(effect, num_pixels, speed))
     };
 
     loop {
@@ -382,8 +393,14 @@ fn run_loop(
                     };
                 }
 
+                Command::SetSpeed(s) => {
+                    let clamped = s.clamp(0.1, 10.0);
+                    speed.store(clamped.to_bits(), Ordering::Relaxed);
+                    if let Ok(mut st) = shared.lock() { st.speed = clamped; }
+                }
+
                 Command::Start => {
-                    if let Some(new_handle) = spawn_effect(&playlist, playlist_index, &registry) {
+                    if let Some(new_handle) = spawn_effect(&playlist, playlist_index, &registry, Arc::clone(&speed)) {
                         state = start_effect(
                             std::mem::replace(&mut state, RunnerState::Idle),
                             new_handle,
@@ -400,7 +417,7 @@ fn run_loop(
                             s.playlist_index = playlist_index;
                         }
                     }
-                    if let Some(new_handle) = spawn_effect(&playlist, playlist_index, &registry) {
+                    if let Some(new_handle) = spawn_effect(&playlist, playlist_index, &registry, Arc::clone(&speed)) {
                         state = start_effect(
                             std::mem::replace(&mut state, RunnerState::Idle),
                             new_handle,
@@ -418,7 +435,7 @@ fn run_loop(
                         }
                     }
                     if let Some(effect) = registry.create(&name) {
-                        let new_handle = EffectHandle::spawn(effect, num_pixels);
+                        let new_handle = EffectHandle::spawn(effect, num_pixels, Arc::clone(&speed));
                         state = start_effect(
                             std::mem::replace(&mut state, RunnerState::Idle),
                             new_handle,
@@ -494,7 +511,7 @@ fn run_loop(
             effect_elapsed = 0.0;
             playlist_index = (playlist_index + 1) % playlist.len().max(1);
             if let Ok(mut s) = shared.lock() { s.playlist_index = playlist_index; }
-            if let Some(new_handle) = spawn_effect(&playlist, playlist_index, &registry) {
+            if let Some(new_handle) = spawn_effect(&playlist, playlist_index, &registry, Arc::clone(&speed)) {
                 state = start_effect(
                     std::mem::replace(&mut state, RunnerState::Idle),
                     new_handle,

@@ -52,6 +52,10 @@ struct Args {
     /// Physical color channel order of the LED strip (e.g. rgb, grb, bgr)
     #[arg(long, default_value = "rgb")]
     color_order: String,
+
+    /// Effect speed multiplier (0.1 = very slow, 1.0 = normal, 4.0 = very fast)
+    #[arg(long, default_value_t = 1.0)]
+    speed: f32,
 }
 
 #[tokio::main]
@@ -92,6 +96,7 @@ async fn main() -> anyhow::Result<()> {
         fade_out_ms: args.fade_out_ms,
         crossfade_ms: args.crossfade_ms,
         effect_duration_ms: args.effect_duration_ms,
+        speed: args.speed,
     };
     let runner = Runner::new(pixels, registry, config);
 

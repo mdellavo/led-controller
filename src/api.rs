@@ -55,6 +55,7 @@ pub struct CommandRequest {
     pub action: String,
     pub effect: Option<String>,
     pub value_ms: Option<u64>,
+    pub value: Option<f32>,
     pub index: Option<usize>,
     pub to_index: Option<usize>,
 }
@@ -87,6 +88,7 @@ pub async fn post_command(
             (Some(from), Some(to)) => Some(Command::MoveInPlaylist(from, to)),
             _ => None,
         },
+        "set_speed" => req.value.map(Command::SetSpeed),
         _ => None,
     };
 
