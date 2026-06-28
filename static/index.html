@@ -102,6 +102,7 @@
     button {
       flex: 1;
       padding: 0.65rem 1rem;
+      min-height: 44px;
       border: none;
       border-radius: 8px;
       font-size: 0.875rem;
@@ -141,6 +142,7 @@
     select {
       flex: 1;
       padding: 0.625rem 0.75rem;
+      min-height: 44px;
       background: var(--bg);
       border: 1px solid var(--border);
       border-radius: 8px;
@@ -174,6 +176,34 @@
       width: 100%;
       accent-color: var(--accent);
       cursor: pointer;
+      min-height: 36px;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+      box-shadow: 0 0 0 2px var(--surface);
+    }
+    input[type=range]::-webkit-slider-runnable-track {
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+    }
+    input[type=range]::-moz-range-thumb {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: var(--accent);
+      border: 2px solid var(--surface);
+      cursor: pointer;
+    }
+    input[type=range]::-moz-range-track {
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
     }
 
     .fade-field .fade-value {
@@ -196,7 +226,8 @@
       display: flex;
       align-items: center;
       gap: 0.5rem;
-      padding: 0.35rem 0.5rem;
+      padding: 0.5rem 0.5rem;
+      min-height: 44px;
       border-radius: 6px;
       font-size: 0.85rem;
       transition: background 0.1s;
@@ -211,15 +242,16 @@
     .playlist-item.drag-over {
       border-top: 2px solid var(--accent);
     }
-    .playlist-item.dragging { opacity: 0.4; }
+    .playlist-item.dragging { opacity: 0.4; pointer-events: none; }
 
     .item-drag {
       cursor: grab;
       color: var(--text-dim);
       font-size: 0.75rem;
-      padding: 0 0.1rem;
+      padding: 0.5rem 0.4rem;
       flex-shrink: 0;
       line-height: 1;
+      touch-action: none;
     }
     .item-drag:active { cursor: grabbing; }
 
@@ -293,6 +325,7 @@
     input[type=number] {
       width: 72px;
       padding: 0.5rem 0.625rem;
+      min-height: 44px;
       background: var(--bg);
       border: 1px solid var(--border);
       border-radius: 8px;
@@ -307,6 +340,12 @@
       color: var(--text-dim);
       margin-top: 0.875rem;
       line-height: 1.4;
+    }
+
+    /* Touch devices — no hover state, so show controls unconditionally */
+    @media (hover: none) {
+      .item-remove { opacity: 0.7; }
+      .item-remove:hover { color: var(--red); }
     }
 
     /* Error toast */

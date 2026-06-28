@@ -72,49 +72,48 @@ document.getElementById('btn-add-to-playlist').onclick = () => {
 // Playlist — drag-to-reorder, click-to-play, remove button
 // --------------------------------------------------------------------------
 
-let dragSrcIndex = null;
-let isDragging = false;
+// Pointer-event drag — works on both mouse (desktop) and touch (mobile).
+// The dragging item gets pointer-events:none via CSS so elementFromPoint
+// can see through it to whichever item is underneath.
+let dragState = null;
 
 const playlistEl = document.getElementById('playlist');
 
-playlistEl.addEventListener('dragstart', (e) => {
-  const item = e.target.closest('.playlist-item');
+playlistEl.addEventListener('pointerdown', (e) => {
+  const handle = e.target.closest('.item-drag');
+  if (!handle) return;
+  const item = handle.closest('.playlist-item');
   if (!item) return;
-  dragSrcIndex = parseInt(item.dataset.index);
-  isDragging = true;
+  e.preventDefault();
+  playlistEl.setPointerCapture(e.pointerId);
+  dragState = { pointerId: e.pointerId, srcIndex: parseInt(item.dataset.index) };
   item.classList.add('dragging');
-  e.dataTransfer.effectAllowed = 'move';
 });
 
-playlistEl.addEventListener('dragend', (e) => {
-  isDragging = false;
-  document.querySelectorAll('.playlist-item').forEach((el) => {
-    el.classList.remove('dragging', 'drag-over');
-  });
-});
-
-playlistEl.addEventListener('dragover', (e) => {
+playlistEl.addEventListener('pointermove', (e) => {
+  if (!dragState || e.pointerId !== dragState.pointerId) return;
   e.preventDefault();
-  e.dataTransfer.dropEffect = 'move';
-  const item = e.target.closest('.playlist-item');
   document.querySelectorAll('.playlist-item').forEach((el) => el.classList.remove('drag-over'));
-  if (item) item.classList.add('drag-over');
+  const under = document.elementFromPoint(e.clientX, e.clientY)?.closest('.playlist-item');
+  if (under && !under.classList.contains('dragging')) under.classList.add('drag-over');
 });
 
-playlistEl.addEventListener('dragleave', (e) => {
-  const item = e.target.closest('.playlist-item');
-  if (item) item.classList.remove('drag-over');
-});
-
-playlistEl.addEventListener('drop', (e) => {
-  e.preventDefault();
-  const item = e.target.closest('.playlist-item');
-  if (!item) return;
-  const toIndex = parseInt(item.dataset.index);
-  if (dragSrcIndex !== null && dragSrcIndex !== toIndex) {
-    api('move_in_playlist', { index: dragSrcIndex, to_index: toIndex });
+playlistEl.addEventListener('pointerup', (e) => {
+  if (!dragState || e.pointerId !== dragState.pointerId) return;
+  const under = document.elementFromPoint(e.clientX, e.clientY)?.closest('.playlist-item');
+  if (under && !under.classList.contains('dragging')) {
+    const toIndex = parseInt(under.dataset.index);
+    if (toIndex !== dragState.srcIndex) {
+      api('move_in_playlist', { index: dragState.srcIndex, to_index: toIndex });
+    }
   }
-  dragSrcIndex = null;
+  document.querySelectorAll('.playlist-item').forEach((el) => el.classList.remove('dragging', 'drag-over'));
+  dragState = null;
+});
+
+playlistEl.addEventListener('pointercancel', () => {
+  document.querySelectorAll('.playlist-item').forEach((el) => el.classList.remove('dragging', 'drag-over'));
+  dragState = null;
 });
 
 // Click on item name to play; click remove button to remove
@@ -256,7 +255,7 @@ const renderState = (state) => {
   }
 
   // Playlist — skip re-render during drag to avoid interrupting the interaction
-  if (!isDragging) {
+  if (!dragState) {
     const newInner = state.playlist
       .map((name, i) => {
         const active = i === state.playlist_index && state.is_running;
