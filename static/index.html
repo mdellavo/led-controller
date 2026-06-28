@@ -93,6 +93,16 @@
       font-style: italic;
     }
 
+    .status-sub {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 0.5rem;
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      font-variant-numeric: tabular-nums;
+      min-height: 1em;
+    }
+
     /* Buttons */
     .btn-row {
       display: flex;
@@ -384,6 +394,10 @@
         <div class="status-dot stopped" id="status-dot"></div>
         <span class="status-label" id="status-label">Stopped</span>
         <span class="status-effect" id="status-effect"></span>
+      </div>
+      <div class="status-sub">
+        <span id="status-timer"></span>
+        <span id="status-fps"></span>
       </div>
     </div>
 

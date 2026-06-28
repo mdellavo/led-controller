@@ -214,6 +214,8 @@ pub struct SharedState {
     pub playlist_index: usize,
     pub effects: Vec<String>,
     pub effect_descriptions: std::collections::HashMap<String, String>,
+    pub effect_elapsed_secs: u32,
+    pub fps: f32,
     pub fade_in_ms: u64,
     pub fade_out_ms: u64,
     pub crossfade_ms: u64,
@@ -308,6 +310,8 @@ impl Runner {
             playlist_index: initial_playlist_index,
             effects: effects_list,
             effect_descriptions,
+            effect_elapsed_secs: 0,
+            fps: 0.0,
             fade_in_ms: config.fade_in_ms,
             fade_out_ms: config.fade_out_ms,
             crossfade_ms: config.crossfade_ms,
@@ -653,22 +657,29 @@ fn run_loop(
         pixels.show();
 
         // --- update shared state; push to WebSocket subscribers on any change ---
-        let is_running     = state.is_active();
-        let current_effect = state.current_name().map(|n| n.to_string());
-        let new_transition = match &state {
+        let is_running          = state.is_active();
+        let current_effect      = state.current_name().map(|n| n.to_string());
+        let new_transition      = match &state {
             RunnerState::FadingIn    { .. } => Some("fading_in".into()),
             RunnerState::FadingOut   { .. } => Some("fading_out".into()),
             RunnerState::CrossFading { .. } => Some("crossfading".into()),
             _ => None,
         };
+        let new_elapsed_secs: u32 = if matches!(state, RunnerState::Running { .. }) {
+            effect_elapsed as u32
+        } else {
+            0
+        };
         if let Ok(mut s) = shared.lock() {
             let changed = dirty
-                || s.is_running     != is_running
-                || s.current_effect != current_effect
-                || s.transition     != new_transition;
-            s.is_running     = is_running;
-            s.current_effect = current_effect;
-            s.transition     = new_transition;
+                || s.is_running          != is_running
+                || s.current_effect      != current_effect
+                || s.transition          != new_transition
+                || s.effect_elapsed_secs != new_elapsed_secs;
+            s.is_running          = is_running;
+            s.current_effect      = current_effect;
+            s.transition          = new_transition;
+            s.effect_elapsed_secs = new_elapsed_secs;
             if changed {
                 let _ = notify.send(s.clone());
             }
@@ -681,9 +692,14 @@ fn run_loop(
         fps_frames += 1;
         let fps_elapsed = fps_window.elapsed();
         if fps_elapsed >= Duration::from_secs(5) {
-            tracing::info!("fps: {:.1}", fps_frames as f32 / fps_elapsed.as_secs_f32());
+            let fps_val = fps_frames as f32 / fps_elapsed.as_secs_f32();
+            tracing::info!("fps: {:.1}", fps_val);
             fps_frames = 0;
             fps_window = Instant::now();
+            if let Ok(mut s) = shared.lock() {
+                s.fps = fps_val;
+                let _ = notify.send(s.clone());
+            }
         }
 
         let elapsed = frame_start.elapsed();

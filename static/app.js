@@ -272,6 +272,21 @@ const renderState = (state) => {
   }
   effect.textContent = state.current_effect ? effectLabel(state.current_effect) : '';
 
+  // Timer — only shown while Running (not during transitions)
+  const timerEl = document.getElementById('status-timer');
+  const secs = state.effect_elapsed_secs || 0;
+  if (state.is_running && !state.transition && secs > 0) {
+    timerEl.textContent = secs < 60
+      ? `${secs}s`
+      : `${Math.floor(secs / 60)}m ${secs % 60}s`;
+  } else {
+    timerEl.textContent = '';
+  }
+
+  // FPS
+  const fpsEl = document.getElementById('status-fps');
+  fpsEl.textContent = state.fps ? `${Math.round(state.fps)} fps` : '';
+
   // Populate effect dropdowns (once, or when effect list changes)
   if (!lastState || lastState.effects.length !== state.effects.length) {
     ['effect-select', 'playlist-add-select'].forEach((id) => {
