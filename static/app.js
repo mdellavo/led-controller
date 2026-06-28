@@ -47,6 +47,16 @@ const EFFECT_ICONS = {
   'Heartbeat':             '💓',
   'Morse Code':            '📡',
   'Comets':                '🌠',
+  'Fireflies':             '🪲',
+  'DNA Helix':             '🧬',
+  'Sand':                  '🏖️',
+  'Neon Sign':             '💡',
+  'Sunrise':               '🌄',
+  'Pong':                  '🏓',
+  'Bioluminescence':       '🦑',
+  'Twister':               '🌪️',
+  'Oil Slick':             '🫧',
+  'Galaxy':                '🔭',
 };
 
 const effectLabel = (name) => EFFECT_ICONS[name] ? `${EFFECT_ICONS[name]} ${name}` : name;
