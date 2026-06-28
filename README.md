@@ -362,6 +362,27 @@ static/
 └── app.js               frontend JS (embedded in binary via include_str!)
 ```
 
+## Roadmap / ideas
+
+### Hardware / control
+- **Gamma correction** — apply a gamma lookup table at the hardware write so brightness changes feel perceptually smooth rather than steppy
+- **Per-effect color palette** — let effects draw from a user-chosen set of colors rather than hard-coded values
+- **Segmented effects** — run different effects on different sections of the strip simultaneously
+
+### UI / usability
+- **Saved presets** — name and store a (effect + speed + brightness + duration) configuration to recall later
+- **Persist state across restarts** — write current state to a small JSON file so the strip comes back in its last state after a reboot or power cut
+- **Dimming schedule** — automatically dim or turn off at a configured time (e.g. midnight), useful for permanent installs
+- **Mobile touch targets** — larger sliders and buttons for comfortable use on a small touchscreen
+- **Basic auth** — single username/password so the UI is not open to everyone on the local network
+
+### Effects
+- **Audio reactive** — sample a USB mic/dongle and drive brightness or color from beat detection or amplitude
+- **Custom color picker** — choose the color for solid/wipe/chase effects from the UI without editing code
+
+### Performance / architecture
+- **WebSocket push** — replace the 500 ms poll with a WebSocket connection for instant UI updates and lower CPU use on the Pi
+
 ## Transition behavior
 
 | Situation | Result |
