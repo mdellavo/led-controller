@@ -10,18 +10,22 @@ A Rust web server for controlling WS2812B LED strips (NeoPixels) on a Raspberry 
 - Frame-rate independent animation — all effects scale by delta time, stable at any CPU load or speed setting
 - Gamma correction — perceptual brightness LUT applied at hardware write (configurable exponent, default 2.2)
 - Auto-advance: configurable per-effect play time before moving to the next playlist entry
-- Full playlist management: add, remove, drag-to-reorder, shuffle
+- Full playlist management: add, remove, drag-to-reorder, shuffle; drag works on both desktop and mobile touch
 - 23 built-in effects (see below)
 - Each effect runs in its own OS thread
 - Pluggable effect system — add a new effect in one file
 - Persistent state — playlist, speed, brightness, gamma, color order, and all durations are saved to `led-state.json` and restored on restart
 - Hardware settings configurable live from the web UI: GPIO pin, pixel count, color order, gamma
+- WebSocket push — UI updates within one frame (~16 ms) on any state change; reconnects automatically
+- Mobile-friendly UI — 44 px touch targets, pointer-event drag-to-reorder, always-visible controls on touch devices
 - `NullPixels` dev mode (no hardware required) with debug logging
 - Single binary deployment — no runtime dependencies on the target beyond the binary itself
 
 ## Changelog
 
 **Current**
+- WebSocket push replaces 500 ms polling — UI updates within one frame on any state change, with auto-reconnect
+- Mobile-friendly UI — 44 px touch targets, pointer-event drag-to-reorder (works on touchscreens), always-visible remove buttons on touch devices
 - Persist UI state (playlist, speed, brightness, gamma, color order, durations) across restarts via `led-state.json`
 - GPIO pin, pixel count, color order, and gamma configurable live from the web UI
 - Sub-pixel antialiasing on moving effects (Chase, Cylon, KITT, Meteor, Bouncing Balls) — point sources split brightness between adjacent LEDs
@@ -264,7 +268,11 @@ Open `http://<pi-ip>:3000` in a browser.
 
 ## API
 
-All endpoints accept/return JSON.
+### `GET /ws` — WebSocket
+
+Upgrades to a WebSocket connection. The server immediately sends the current state as a JSON text frame, then pushes an updated frame whenever any field changes (within one run-loop frame, ~16 ms). The connection is read-only — the server ignores any frames sent by the client.
+
+Reconnect automatically on close; the server resends the full current state on each new connection.
 
 ### `GET /api/state`
 
@@ -402,7 +410,6 @@ led-state.json           persisted UI state (created automatically on first run)
 ### UI / usability
 - **Saved presets** — name and store a (effect + speed + brightness + duration) configuration to recall later
 - **Dimming schedule** — automatically dim or turn off at a configured time (e.g. midnight), useful for permanent installs
-- **Mobile touch targets** — larger sliders and buttons for comfortable use on a small touchscreen
 - **Basic auth** — single username/password so the UI is not open to everyone on the local network
 
 ### Effects
@@ -410,9 +417,6 @@ led-state.json           persisted UI state (created automatically on first run)
 - **Custom color picker** — choose the color for solid/wipe/chase effects from the UI without editing code
 - **Per-effect color palette** — let effects draw from a user-chosen set of colors rather than hard-coded values
 - **Segmented effects** — run different effects on different sections of the strip simultaneously
-
-### Performance / architecture
-- **WebSocket push** — replace the 500 ms poll with a WebSocket connection for instant UI updates and lower CPU use on the Pi
 
 ## Transition behavior
 
