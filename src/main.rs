@@ -68,6 +68,10 @@ struct Args {
     /// Gamma correction exponent [default: 2.2, or saved state]
     #[arg(long)]
     gamma: Option<f32>,
+
+    /// Directory to scan for Lua effect scripts (*.lua) [default: effects/]
+    #[arg(long, default_value = "effects")]
+    effects_dir: std::path::PathBuf,
 }
 
 #[tokio::main]
@@ -135,14 +139,20 @@ async fn main() -> anyhow::Result<()> {
     // Registry factory — called when pixel count changes
     // -----------------------------------------------------------------------
 
-    let registry_factory: RegistryFactory = Arc::new(|n: usize| default_registry(n));
+    let effects_dir = args.effects_dir.clone();
+    let registry_factory: RegistryFactory = Arc::new(move |n: usize| {
+        let mut r = default_registry(n);
+        effects::load_lua_effects(&effects_dir, n, &mut r);
+        r
+    });
 
     // -----------------------------------------------------------------------
     // Initial pixel strip and registry
     // -----------------------------------------------------------------------
 
-    let pixels   = pixel_factory(gpio_pin, num_pixels, args.brightness);
-    let registry = default_registry(num_pixels);
+    let pixels = pixel_factory(gpio_pin, num_pixels, args.brightness);
+    let mut registry = default_registry(num_pixels);
+    effects::load_lua_effects(&args.effects_dir, num_pixels, &mut registry);
 
     let config = RunnerConfig {
         fade_in_ms, fade_out_ms, crossfade_ms,

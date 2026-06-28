@@ -84,6 +84,8 @@ impl EffectRegistry {
     }
 }
 
+pub mod lua_effect;
+
 pub mod rainbow;
 pub mod fade;
 pub mod solid;
@@ -100,6 +102,42 @@ pub mod theatre_chase;
 pub mod fire;
 pub mod bouncing_balls;
 pub mod meteor;
+
+/// Scan `dir` for `*.lua` files and register each as a `LuaEffect`.
+/// Silently skips the directory if it doesn't exist. Scripts that fail to
+/// load or lack a `name` global fall back to the filename stem as the name.
+pub fn load_lua_effects(dir: &std::path::Path, num_pixels: usize, registry: &mut EffectRegistry) {
+    let entries = match std::fs::read_dir(dir) {
+        Ok(e) => e,
+        Err(_) => return,
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("lua") {
+            continue;
+        }
+        let source = match std::fs::read_to_string(&path) {
+            Ok(s) => s,
+            Err(e) => {
+                tracing::warn!("skipping {:?}: {e}", path);
+                continue;
+            }
+        };
+        let name = lua_effect::LuaEffect::probe_name(&source)
+            .or_else(|| path.file_stem().map(|s| s.to_string_lossy().into_owned()))
+            .unwrap_or_else(|| "Lua Effect".to_string());
+        // Leak the name once — effect names are 'static in the Effect trait.
+        let static_name: &'static str = Box::leak(name.into_boxed_str());
+        tracing::info!(
+            "loaded Lua effect {:?}: {static_name}",
+            path.file_name().unwrap_or_default()
+        );
+        registry.register(static_name, {
+            let src = source.clone();
+            move || Box::new(lua_effect::LuaEffect::new(static_name, src.clone(), num_pixels))
+        });
+    }
+}
 
 pub fn default_registry(num_pixels: usize) -> EffectRegistry {
     let mut r = EffectRegistry::new();
