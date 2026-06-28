@@ -109,6 +109,76 @@ impl RunnerState {
 }
 
 // --------------------------------------------------------------------------
+// Persistent state — saved to disk and reloaded across restarts
+// --------------------------------------------------------------------------
+
+fn default_speed()       -> f32    { 1.0 }
+fn default_brightness()  -> f32    { 1.0 }
+fn default_gamma()       -> f32    { 2.2 }
+fn default_color_order() -> String { "rgb".to_string() }
+fn default_fade_ms()     -> u64    { 3000 }
+fn default_gpio_pin()    -> i32    { 18 }
+fn default_num_pixels()  -> usize  { 60 }
+fn default_true()        -> bool   { true }
+
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub struct PersistentState {
+    #[serde(default)]                          pub playlist: Vec<String>,
+    #[serde(default)]                          pub playlist_index: usize,
+    #[serde(default = "default_speed")]        pub speed: f32,
+    #[serde(default = "default_brightness")]   pub brightness: f32,
+    #[serde(default = "default_gamma")]        pub gamma: f32,
+    #[serde(default = "default_color_order")]  pub color_order: String,
+    #[serde(default = "default_fade_ms")]      pub fade_in_ms: u64,
+    #[serde(default = "default_fade_ms")]      pub fade_out_ms: u64,
+    #[serde(default = "default_fade_ms")]      pub crossfade_ms: u64,
+    #[serde(default)]                          pub effect_duration_ms: u64,
+    #[serde(default = "default_gpio_pin")]     pub gpio_pin: i32,
+    #[serde(default = "default_num_pixels")]   pub num_pixels: usize,
+    #[serde(default = "default_true")]         pub is_running: bool,
+}
+
+impl PersistentState {
+    pub fn load(path: &std::path::Path) -> Option<Self> {
+        let data = std::fs::read_to_string(path).ok()?;
+        serde_json::from_str(&data)
+            .map_err(|e| tracing::warn!("ignoring malformed state file: {e}"))
+            .ok()
+    }
+
+    pub fn save(&self, path: &std::path::Path) {
+        match serde_json::to_string_pretty(self) {
+            Ok(json) => {
+                if let Err(e) = std::fs::write(path, json) {
+                    tracing::warn!("failed to save state to {}: {e}", path.display());
+                }
+            }
+            Err(e) => tracing::warn!("failed to serialize state: {e}"),
+        }
+    }
+}
+
+impl From<&SharedState> for PersistentState {
+    fn from(s: &SharedState) -> Self {
+        Self {
+            playlist: s.playlist.clone(),
+            playlist_index: s.playlist_index,
+            speed: s.speed,
+            brightness: s.brightness,
+            gamma: s.gamma,
+            color_order: s.color_order.clone(),
+            fade_in_ms: s.fade_in_ms,
+            fade_out_ms: s.fade_out_ms,
+            crossfade_ms: s.crossfade_ms,
+            effect_duration_ms: s.effect_duration_ms,
+            gpio_pin: s.gpio_pin,
+            num_pixels: s.num_pixels,
+            is_running: s.is_running,
+        }
+    }
+}
+
+// --------------------------------------------------------------------------
 // Commands and shared state
 // --------------------------------------------------------------------------
 
@@ -168,6 +238,12 @@ pub struct RunnerConfig {
     pub gpio_pin: i32,
     pub hw_brightness: u8,
     pub color_order: ColorOrder,
+    /// Pre-populated playlist to use instead of the full registry order.
+    pub initial_playlist: Option<Vec<String>>,
+    /// Starting position within the initial playlist.
+    pub initial_playlist_index: usize,
+    /// Where to persist state across restarts.
+    pub state_file: Option<std::path::PathBuf>,
 }
 
 impl Default for RunnerConfig {
@@ -177,6 +253,7 @@ impl Default for RunnerConfig {
             fade_in_ms: ms, fade_out_ms: ms, crossfade_ms: ms,
             effect_duration_ms: 0, speed: 1.0, brightness: 1.0, gamma: 2.2,
             gpio_pin: 18, hw_brightness: 25, color_order: ColorOrder::default(),
+            initial_playlist: None, initial_playlist_index: 0, state_file: None,
         }
     }
 }
@@ -201,16 +278,22 @@ impl Runner {
         let speed      = Arc::new(AtomicU32::new(config.speed.to_bits()));
         let brightness = Arc::new(AtomicU32::new(config.brightness.to_bits()));
 
-        let initial_playlist = registry.names().to_vec();
-        let effects_list     = registry.names().to_vec();
-        let color_order_str  = config.color_order.to_string();
+        let initial_playlist = match &config.initial_playlist {
+            Some(pl) => pl.iter().filter(|n| registry.contains(n)).cloned().collect(),
+            None => registry.names().to_vec(),
+        };
+        let effects_list    = registry.names().to_vec();
+        let color_order_str = config.color_order.to_string();
+
+        let initial_playlist_index = config.initial_playlist_index
+            .min(initial_playlist.len().saturating_sub(1));
 
         let shared_state = Arc::new(Mutex::new(SharedState {
             is_running: false,
             current_effect: None,
             transition: None,
             playlist: initial_playlist,
-            playlist_index: 0,
+            playlist_index: initial_playlist_index,
             effects: effects_list,
             fade_in_ms: config.fade_in_ms,
             fade_out_ms: config.fade_out_ms,
@@ -225,8 +308,9 @@ impl Runner {
         }));
 
         let state_clone = Arc::clone(&shared_state);
+        let state_file  = config.state_file.clone();
         thread::spawn(move || {
-            run_loop(pixels, registry, rx, num_pixels, state_clone, config, speed, brightness, pixel_factory, registry_factory);
+            run_loop(pixels, registry, rx, num_pixels, state_clone, config, speed, brightness, pixel_factory, registry_factory, state_file);
         });
 
         Self { tx, state: shared_state }
@@ -273,6 +357,14 @@ fn do_spawn(
 // Main runner loop (runs in its own thread)
 // --------------------------------------------------------------------------
 
+fn save_state(shared: &Arc<Mutex<SharedState>>, path: &Option<std::path::PathBuf>) {
+    if let Some(p) = path {
+        if let Ok(s) = shared.lock() {
+            PersistentState::from(&*s).save(p);
+        }
+    }
+}
+
 fn run_loop(
     mut pixels: Box<dyn PixelStrip>,
     mut registry: EffectRegistry,
@@ -284,6 +376,7 @@ fn run_loop(
     brightness: Arc<AtomicU32>,
     pixel_factory: PixelFactory,
     registry_factory: RegistryFactory,
+    state_file: Option<std::path::PathBuf>,
 ) {
     let mut gamma_lut   = build_gamma_lut(config.gamma);
     let mut color_order = config.color_order;
@@ -292,17 +385,24 @@ fn run_loop(
 
     let mut black = vec![[0u8; 3]; num_pixels];
     let mut state = RunnerState::Idle;
-    let mut playlist: Vec<String> = registry.names().to_vec();
-    let mut playlist_index: usize = 0;
+    let mut playlist: Vec<String> = match config.initial_playlist {
+        Some(ref pl) => pl.iter().filter(|n| registry.contains(n)).cloned().collect(),
+        None => registry.names().to_vec(),
+    };
+    let mut playlist_index: usize = config.initial_playlist_index
+        .min(playlist.len().saturating_sub(1));
     let mut fade_in_dur   = config.fade_in_ms as f32 / 1000.0;
     let mut fade_out_dur  = config.fade_out_ms as f32 / 1000.0;
     let mut crossfade_dur = config.crossfade_ms as f32 / 1000.0;
     let mut effect_duration = config.effect_duration_ms as f32 / 1000.0;
     let mut effect_elapsed: f32 = 0.0;
+    let mut last_is_running = false;
 
     loop {
         // --- process incoming commands ---
+        let mut dirty = false;
         while let Ok(cmd) = rx.try_recv() {
+            dirty = true;
             match cmd {
                 Command::SetFadeInMs(ms) => {
                     fade_in_dur = ms as f32 / 1000.0;
@@ -463,6 +563,8 @@ fn run_loop(
             }
         }
 
+        if dirty { save_state(&shared, &state_file); }
+
         // --- advance state machine and compute output ---
         let dt = FRAME_DURATION.as_secs_f32();
 
@@ -531,15 +633,20 @@ fn run_loop(
         pixels.show();
 
         // --- update shared state for API reads ---
+        let is_running = state.is_active();
         if let Ok(mut s) = shared.lock() {
-            s.is_running = state.is_active();
+            s.is_running = is_running;
             s.current_effect = state.current_name().map(|n| n.to_string());
             s.transition = match &state {
-                RunnerState::FadingIn   { .. } => Some("fading_in".into()),
-                RunnerState::FadingOut  { .. } => Some("fading_out".into()),
+                RunnerState::FadingIn    { .. } => Some("fading_in".into()),
+                RunnerState::FadingOut   { .. } => Some("fading_out".into()),
                 RunnerState::CrossFading { .. } => Some("crossfading".into()),
                 _ => None,
             };
+        }
+        if is_running != last_is_running {
+            last_is_running = is_running;
+            save_state(&shared, &state_file);
         }
 
         thread::sleep(FRAME_DURATION);
