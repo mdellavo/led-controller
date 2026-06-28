@@ -259,11 +259,12 @@ Open `http://<pi-ip>:3000` in a browser.
 
 ## Effects
 
-All 58 effects are Lua scripts in the `effects/` directory.
+All 68 effects are Lua scripts in the `effects/` directory.
 
 | Effect | Description |
 |---|---|
 | 🌌 Aurora | Four overlapping sine-wave bands of green, teal, blue, and purple shimmer at independent speeds |
+| 🧩 Cellular Automata | Rule 30 cellular automaton; complex patterns emerge each generation from a simple 3-cell neighborhood rule |
 | 🦑 Bioluminescence | Deep ocean darkness with expanding blue-green pulses, like disturbed bioluminescent plankton |
 | 🎱 Bouncing Balls | Three balls (red, green, blue) bounce under simulated gravity with energy loss on each bounce |
 | 🫁 Breathing | All pixels pulse in and out on a slow breathing rhythm using a sin² envelope |
@@ -278,11 +279,14 @@ All 58 effects are Lua scripts in the `effects/` directory.
 | 🎊 Confetti | Saturated random-hue dots scatter onto a slowly decaying background |
 | 👁️ Cylon | Red Larson-scanner eye bounces back and forth with exponential brightness falloff on either side |
 | 🧬 DNA Helix | Two interlocked sine waves in cyan and orange scroll along the strip like a DNA double helix |
+| 🎲 Domino | A tap at one end triggers a chain reaction that cascades to the other end, each pixel tipping the next |
 | 💧 Drip | Colored drops spawn at one end, accelerate under gravity, and splat at the other end |
 | 🔥 Fire | Heat-diffusion simulation: base glows hot, heat rises through a black→red→yellow→white palette |
+| 🐣 Easter | Soft pastel mint, lavender, peach, sky blue, and rose pink breathe gently across the strip |
 | 🪲 Fireflies | Dim drifting dots that randomly glow bright then fade, like fireflies on a summer night |
 | 💥 Fireworks | Rockets launch from the base, reach an apex, and burst into colorful fragments |
 | 🔭 Galaxy | Soft drifting nebula of blues and purples with occasional bright star flares |
+| 🍿 Popcorn | Pixels pop bright then fade; spawn rate ramps up in waves like corn popping |
 | 🌅 Gradient Cycle | Smooth gradient between two complementary colors that slowly scrolls across the strip |
 | 🎃 Halloween Eyes | A pair of red eyes appears at a random position, holds, fades out, then reappears elsewhere |
 | 💓 Heartbeat | A red lub-dub double pulse at 72 BPM with a long dark pause between beats |
@@ -299,6 +303,7 @@ All 58 effects are Lua scripts in the `effects/` directory.
 | 🔮 Plasma | Four sine waves at different spatial and temporal frequencies combine into a shifting color interference pattern |
 | 🚨 Police Lights | Alternating red/blue half-strip strobes with a brief white center flash between each side |
 | 🏓 Pong | A bright dot bounces between the two ends, getting faster with each hit |
+| 🧪 Reaction Diffusion | Gray-Scott activator-inhibitor model; organic Turing stripe patterns emerge from chemistry |
 | 🏳️‍🌈 Pride | Six-color pride flag mapped across the strip and slowly scrolling |
 | 🌈 Rainbow | Colorwheel hue shifts pixel-to-pixel across the strip, cycling through all colors continuously |
 | 🎆 Random Fade | Sparks of random color ignite at random positions, ramp up to peak brightness, then fade out |
@@ -307,6 +312,7 @@ All 58 effects are Lua scripts in the `effects/` directory.
 | 🏃 Running Lights | Red sine-wave brightness ripples continuously down the strip |
 | 🌿 Running Lights Green | Green sine-wave brightness ripples continuously down the strip |
 | 🏖️ Sand | Sandy particles settle under gravity, then scatter with a periodic shake |
+| 🎇 Sparkler | A drifting source continuously throws fast short-lived sparks in both directions |
 | 〰️ Sinelon | A single dot rides a sine wave back and forth leaving a fading trail |
 | ❄️ Snow Sparkle | Dim white background with a single bright sparkle that jumps to a new position every 200 ms |
 | 🔵 Solid Blue | Solid static blue |
@@ -321,6 +327,10 @@ All 58 effects are Lua scripts in the `effects/` directory.
 | 🎪 Theatre Chase Rainbow | Theatre chase with a different colorwheel hue on each lit pixel, advancing with every step |
 | ⭐ Twinkle | Ten white pixels reposition randomly every 100 ms |
 | 🌪️ Twister | Multiple overlapping sine waves at different frequencies create shifting interference patterns |
+| ⚖️ Tug of War | Red and blue forces push from opposite ends; the boundary oscillates and occasionally surges |
+| 📊 VU Meter | Simulated audio level meter with a bouncing bar, green-to-red color gradient, and peak-hold pixel |
+| 🫗 Waterfall | A stream of slowly-shifting color flows steadily from one end to the other |
+| 🐛 Worm | A glowing segmented worm crawls the strip; speed variation makes the body snake and bunch |
 
 ## Lua effect API
 

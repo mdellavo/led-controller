@@ -57,6 +57,16 @@ const EFFECT_ICONS = {
   'Twister':               '🌪️',
   'Oil Slick':             '🫧',
   'Galaxy':                '🔭',
+  'Cellular Automata':     '🧩',
+  'Reaction Diffusion':    '🧪',
+  'VU Meter':              '📊',
+  'Waterfall':             '🫗',
+  'Popcorn':               '🍿',
+  'Worm':                  '🐛',
+  'Domino':                '🎲',
+  'Sparkler':              '🎇',
+  'Easter':                '🐣',
+  'Tug of War':            '⚖️',
 };
 
 const effectLabel = (name) => EFFECT_ICONS[name] ? `${EFFECT_ICONS[name]} ${name}` : name;
