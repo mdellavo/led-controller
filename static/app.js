@@ -25,6 +25,17 @@ const EFFECT_ICONS = {
   'Solid Green':           '🟢',
   'Solid Blue':            '🔵',
   'Solid White':           '⬜',
+  'Breathing':             '🫁',
+  'Candlelight':           '🕯️',
+  'Color Cycle':           '🌀',
+  'Aurora':                '🌌',
+  'Police Lights':         '🚨',
+  'Lightning':             '🌩️',
+  'Confetti':              '🎊',
+  'Sinelon':               '〰️',
+  'Juggle':                '🤹',
+  'Plasma':                '🔮',
+  'Drip':                  '💧',
 };
 
 const effectLabel = (name) => EFFECT_ICONS[name] ? `${EFFECT_ICONS[name]} ${name}` : name;
