@@ -5,6 +5,8 @@ use std::sync::{
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
+use tokio::sync::broadcast;
+
 use rand::seq::SliceRandom;
 
 use crate::effects::{Effect, Buffer, EffectRegistry};
@@ -262,6 +264,13 @@ impl Default for RunnerConfig {
 pub struct Runner {
     pub tx: std::sync::mpsc::SyncSender<Command>,
     pub state: Arc<Mutex<SharedState>>,
+    pub notify: broadcast::Sender<SharedState>,
+}
+
+impl Runner {
+    pub fn subscribe(&self) -> broadcast::Receiver<SharedState> {
+        self.notify.subscribe()
+    }
 }
 
 impl Runner {
@@ -274,6 +283,7 @@ impl Runner {
     ) -> Self {
         let num_pixels = pixels.len();
         let (tx, rx) = std::sync::mpsc::sync_channel(32);
+        let (notify_tx, _) = broadcast::channel::<SharedState>(16);
 
         let speed      = Arc::new(AtomicU32::new(config.speed.to_bits()));
         let brightness = Arc::new(AtomicU32::new(config.brightness.to_bits()));
@@ -307,13 +317,14 @@ impl Runner {
             color_order: color_order_str,
         }));
 
-        let state_clone = Arc::clone(&shared_state);
-        let state_file  = config.state_file.clone();
+        let state_clone  = Arc::clone(&shared_state);
+        let state_file   = config.state_file.clone();
+        let notify_clone = notify_tx.clone();
         thread::spawn(move || {
-            run_loop(pixels, registry, rx, num_pixels, state_clone, config, speed, brightness, pixel_factory, registry_factory, state_file);
+            run_loop(pixels, registry, rx, num_pixels, state_clone, config, speed, brightness, pixel_factory, registry_factory, state_file, notify_clone);
         });
 
-        Self { tx, state: shared_state }
+        Self { tx, state: shared_state, notify: notify_tx }
     }
 
     pub fn send(&self, cmd: Command) {
@@ -377,6 +388,7 @@ fn run_loop(
     pixel_factory: PixelFactory,
     registry_factory: RegistryFactory,
     state_file: Option<std::path::PathBuf>,
+    notify: broadcast::Sender<SharedState>,
 ) {
     let mut gamma_lut   = build_gamma_lut(config.gamma);
     let mut color_order = config.color_order;
@@ -632,17 +644,26 @@ fn run_loop(
         }
         pixels.show();
 
-        // --- update shared state for API reads ---
-        let is_running = state.is_active();
+        // --- update shared state; push to WebSocket subscribers on any change ---
+        let is_running     = state.is_active();
+        let current_effect = state.current_name().map(|n| n.to_string());
+        let new_transition = match &state {
+            RunnerState::FadingIn    { .. } => Some("fading_in".into()),
+            RunnerState::FadingOut   { .. } => Some("fading_out".into()),
+            RunnerState::CrossFading { .. } => Some("crossfading".into()),
+            _ => None,
+        };
         if let Ok(mut s) = shared.lock() {
-            s.is_running = is_running;
-            s.current_effect = state.current_name().map(|n| n.to_string());
-            s.transition = match &state {
-                RunnerState::FadingIn    { .. } => Some("fading_in".into()),
-                RunnerState::FadingOut   { .. } => Some("fading_out".into()),
-                RunnerState::CrossFading { .. } => Some("crossfading".into()),
-                _ => None,
-            };
+            let changed = dirty
+                || s.is_running     != is_running
+                || s.current_effect != current_effect
+                || s.transition     != new_transition;
+            s.is_running     = is_running;
+            s.current_effect = current_effect;
+            s.transition     = new_transition;
+            if changed {
+                let _ = notify.send(s.clone());
+            }
         }
         if is_running != last_is_running {
             last_is_running = is_running;

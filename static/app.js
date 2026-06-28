@@ -213,10 +213,36 @@ effectDurSlider.addEventListener('input', () => {
 });
 
 // --------------------------------------------------------------------------
-// State polling + rendering
+// State updates via WebSocket (with polling fallback on disconnect)
 // --------------------------------------------------------------------------
 
 let lastState = null;
+
+// Reconnecting WebSocket — resets lastState on each reconnect so sliders
+// re-sync from the fresh state the server sends immediately on connect.
+let _ws = null;
+const connectWS = () => {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const ws = new WebSocket(`${proto}//${location.host}/ws`);
+  _ws = ws;
+
+  ws.onmessage = (e) => {
+    try {
+      const state = JSON.parse(e.data);
+      renderState(state);
+      lastState = state;
+    } catch (_) {}
+  };
+
+  ws.onclose = () => {
+    lastState = null; // force slider re-sync on next connect
+    setTimeout(connectWS, 2000);
+  };
+
+  ws.onerror = () => ws.close();
+};
+
+connectWS();
 
 const renderState = (state) => {
   // Status
@@ -296,16 +322,3 @@ const syncSlider = (id, valId, ms) => {
   document.getElementById(valId).textContent = (ms / 1000).toFixed(1) + 's';
 };
 
-const poll = async () => {
-  try {
-    const res = await fetch('/api/state');
-    if (res.ok) {
-      const state = await res.json();
-      renderState(state);
-      lastState = state;
-    }
-  } catch (_) {}
-  setTimeout(poll, 500);
-};
-
-poll();

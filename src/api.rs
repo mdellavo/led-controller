@@ -1,5 +1,8 @@
 use axum::{
-    extract::State,
+    extract::{
+        ws::{Message, WebSocket, WebSocketUpgrade},
+        State,
+    },
     http::{header, StatusCode},
     response::{Html, IntoResponse, Response},
     Json,
@@ -35,6 +38,52 @@ pub async fn app_js() -> Response {
         include_str!("../static/app.js"),
     )
         .into_response()
+}
+
+// --------------------------------------------------------------------------
+// Route: GET /ws  — WebSocket push of SharedState on every change
+// --------------------------------------------------------------------------
+
+pub async fn ws_handler(
+    ws: WebSocketUpgrade,
+    State(app): State<AppState>,
+) -> impl IntoResponse {
+    ws.on_upgrade(move |socket| handle_ws(socket, app))
+}
+
+async fn handle_ws(mut socket: WebSocket, app: AppState) {
+    // Serialize before any await so the MutexGuard is dropped first.
+    let initial = {
+        let state = app.runner.state.lock().unwrap();
+        serde_json::to_string(&*state).unwrap_or_default()
+    };
+    if socket.send(Message::Text(initial)).await.is_err() {
+        return;
+    }
+
+    let mut rx = app.runner.subscribe();
+    loop {
+        tokio::select! {
+            msg = socket.recv() => {
+                match msg {
+                    Some(Ok(Message::Close(_))) | None => break,
+                    _ => {} // ignore pings / other client frames
+                }
+            }
+            result = rx.recv() => {
+                match result {
+                    Ok(state) => {
+                        let json = serde_json::to_string(&state).unwrap_or_default();
+                        if socket.send(Message::Text(json)).await.is_err() {
+                            break;
+                        }
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+                    Err(_) => break,
+                }
+            }
+        }
+    }
 }
 
 // --------------------------------------------------------------------------

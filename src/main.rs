@@ -165,6 +165,7 @@ async fn main() -> anyhow::Result<()> {
     let app = Router::new()
         .route("/", get(api::index))
         .route("/static/app.js", get(api::app_js))
+        .route("/ws", get(api::ws_handler))
         .route("/api/state", get(api::get_state))
         .route("/api/command", post(api::post_command))
         .with_state(state);
