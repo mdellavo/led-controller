@@ -3,16 +3,16 @@ mod effects;
 mod runner;
 mod api;
 
+use std::sync::Arc;
+
 use axum::{routing::{get, post}, Router};
 use clap::Parser;
 use tracing_subscriber::EnvFilter;
 
 use api::AppState;
 use effects::default_registry;
-use runner::{Runner, RunnerConfig};
-
-#[cfg(not(feature = "hardware"))]
-use pixels::NullPixels;
+use pixels::ColorOrder;
+use runner::{Runner, RunnerConfig, PixelFactory, RegistryFactory};
 
 #[derive(Parser)]
 #[command(about = "WS2812B LED strip controller with web interface")]
@@ -76,29 +76,49 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let args = Args::parse();
+    let color_order = ColorOrder::parse(&args.color_order)?;
 
-    let color_order = pixels::ColorOrder::parse(&args.color_order)?;
+    // -----------------------------------------------------------------------
+    // Pixel factory — called at startup and when GPIO pin / pixel count changes
+    // -----------------------------------------------------------------------
 
-    let pixels: Box<dyn pixels::PixelStrip> = {
-        #[cfg(feature = "hardware")]
-        {
-            tracing::info!(
-                pin = args.gpio_pin,
-                pixels = args.pixels,
-                brightness = args.brightness,
-                color_order = %args.color_order,
-                "initializing hardware LED strip"
-            );
-            Box::new(pixels::hardware::NeoPixelStrip::new(args.gpio_pin, args.pixels, args.brightness, color_order)?)
-        }
-        #[cfg(not(feature = "hardware"))]
-        {
-            tracing::info!(pixels = args.pixels, color_order = %args.color_order, "no hardware feature — using NullPixels (dev mode)");
-            Box::new(NullPixels::new(args.pixels, color_order))
-        }
+    #[cfg(feature = "hardware")]
+    let pixel_factory: PixelFactory = {
+        Arc::new(|pin: i32, count: usize, brightness: u8| {
+            match pixels::hardware::NeoPixelStrip::new(pin, count, brightness) {
+                Ok(strip) => {
+                    tracing::info!(pin, count, brightness, "hardware LED strip initialized");
+                    Box::new(strip) as Box<dyn pixels::PixelStrip>
+                }
+                Err(e) => {
+                    tracing::error!("hardware init failed: {e} — falling back to NullPixels");
+                    Box::new(pixels::NullPixels::new(count))
+                }
+            }
+        })
     };
 
+    #[cfg(not(feature = "hardware"))]
+    let pixel_factory: PixelFactory = Arc::new(|_pin: i32, count: usize, _brightness: u8| {
+        tracing::info!(count, "NullPixels (dev mode)");
+        Box::new(pixels::NullPixels::new(count)) as Box<dyn pixels::PixelStrip>
+    });
+
+    // -----------------------------------------------------------------------
+    // Registry factory — called when pixel count changes
+    // -----------------------------------------------------------------------
+
+    let registry_factory: RegistryFactory = Arc::new(|num_pixels: usize| {
+        default_registry(num_pixels)
+    });
+
+    // -----------------------------------------------------------------------
+    // Initial pixel strip and registry
+    // -----------------------------------------------------------------------
+
+    let pixels = pixel_factory(args.gpio_pin, args.pixels, args.brightness);
     let registry = default_registry(args.pixels);
+
     let config = RunnerConfig {
         fade_in_ms: args.fade_in_ms,
         fade_out_ms: args.fade_out_ms,
@@ -107,9 +127,12 @@ async fn main() -> anyhow::Result<()> {
         speed: args.speed,
         brightness: args.brightness_scale,
         gamma: args.gamma,
+        gpio_pin: args.gpio_pin,
+        hw_brightness: args.brightness,
+        color_order,
     };
-    let runner = Runner::new(pixels, registry, config);
 
+    let runner = Runner::new(pixels, registry, config, pixel_factory, registry_factory);
     runner.send(runner::Command::Start);
 
     let state = AppState { runner };

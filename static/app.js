@@ -169,6 +169,38 @@ brightnessSlider.addEventListener('input', () => {
   fadeDebouncers['brightness'] = setTimeout(() => api('set_brightness', { value: v }), 150);
 });
 
+// --------------------------------------------------------------------------
+// Hardware settings
+// --------------------------------------------------------------------------
+
+// Color order — live on change
+const colorOrderSelect = document.getElementById('color-order');
+colorOrderSelect.addEventListener('change', () => {
+  api('set_color_order', { effect: colorOrderSelect.value });
+});
+
+// Gamma — debounced slider
+const gammaSlider = document.getElementById('gamma');
+const gammaVal = document.getElementById('gamma-val');
+gammaSlider.addEventListener('input', () => {
+  const v = parseFloat(gammaSlider.value);
+  gammaVal.textContent = v.toFixed(1);
+  clearTimeout(fadeDebouncers['gamma']);
+  fadeDebouncers['gamma'] = setTimeout(() => api('set_gamma', { value: v }), 300);
+});
+
+// LED count — Apply button (causes hardware reinit)
+document.getElementById('btn-apply-pixels').onclick = () => {
+  const n = parseInt(document.getElementById('num-pixels').value, 10);
+  if (n > 0) api('set_num_pixels', { value_ms: n });
+};
+
+// GPIO pin — Apply button (causes hardware reinit)
+document.getElementById('btn-apply-gpio').onclick = () => {
+  const pin = parseInt(document.getElementById('gpio-pin').value, 10);
+  if (pin > 0) api('set_gpio_pin', { value_ms: pin });
+};
+
 const effectDurSlider = document.getElementById('effect-duration');
 const effectDurVal = document.getElementById('effect-duration-val');
 const fmtDuration = (ms) => ms === 0 ? '∞' : ms >= 60000
@@ -251,6 +283,12 @@ const renderState = (state) => {
     speedVal.textContent = parseFloat(state.speed).toFixed(1) + '×';
     brightnessSlider.value = state.brightness;
     brightnessVal.textContent = Math.round(parseFloat(state.brightness) * 100) + '%';
+    // hardware settings
+    colorOrderSelect.value = (state.color_order || 'rgb').toLowerCase();
+    gammaSlider.value = state.gamma;
+    gammaVal.textContent = parseFloat(state.gamma).toFixed(1);
+    document.getElementById('num-pixels').value = state.num_pixels;
+    document.getElementById('gpio-pin').value = state.gpio_pin;
   }
 };
 

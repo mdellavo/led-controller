@@ -1,8 +1,6 @@
 pub type Color = [u8; 3];
 
 /// Build a 256-entry gamma correction lookup table.
-/// Maps a linear 0–255 value to a perceptually uniform output.
-/// Standard display gamma is 2.2; LED strips often look better at 2.5–2.8.
 pub fn build_gamma_lut(gamma: f32) -> [u8; 256] {
     let mut lut = [0u8; 256];
     for (i, entry) in lut.iter_mut().enumerate() {
@@ -41,7 +39,14 @@ impl ColorOrder {
 }
 
 impl Default for ColorOrder {
-    fn default() -> Self { Self([0, 1, 2]) } // RGB passthrough
+    fn default() -> Self { Self([0, 1, 2]) }
+}
+
+impl std::fmt::Display for ColorOrder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let names = ['r', 'g', 'b'];
+        write!(f, "{}{}{}", names[self.0[0] as usize], names[self.0[1] as usize], names[self.0[2] as usize])
+    }
 }
 
 pub trait PixelStrip: Send + 'static {
@@ -56,32 +61,30 @@ pub trait PixelStrip: Send + 'static {
     }
 }
 
+// Color order remapping is applied by the runner before calling set(),
+// so pixel strip implementations receive already-remapped bytes.
+
 pub struct NullPixels {
     count: usize,
     buffer: Vec<Color>,
-    color_order: ColorOrder,
 }
 
 impl NullPixels {
-    pub fn new(count: usize, color_order: ColorOrder) -> Self {
-        Self { count, buffer: vec![[0, 0, 0]; count], color_order }
+    pub fn new(count: usize) -> Self {
+        Self { count, buffer: vec![[0, 0, 0]; count] }
     }
 }
 
 impl PixelStrip for NullPixels {
     fn set(&mut self, index: usize, color: Color) {
-        self.buffer[index] = self.color_order.apply(color);
+        self.buffer[index] = color;
     }
     fn len(&self) -> usize { self.count }
     fn show(&mut self) {
         let preview: Vec<String> = self.buffer.iter().take(6)
             .map(|[r, g, b]| format!("#{:02x}{:02x}{:02x}", r, g, b))
             .collect();
-        tracing::debug!(
-            pixels = self.count,
-            preview = %preview.join(" "),
-            "show"
-        );
+        tracing::debug!(pixels = self.count, preview = %preview.join(" "), "show");
     }
 }
 
@@ -93,11 +96,10 @@ pub mod hardware {
     pub struct NeoPixelStrip {
         controller: rs_ws281x::Controller,
         count: usize,
-        color_order: ColorOrder,
     }
 
     impl NeoPixelStrip {
-        pub fn new(pin: i32, count: usize, brightness: u8, color_order: ColorOrder) -> anyhow::Result<Self> {
+        pub fn new(pin: i32, count: usize, brightness: u8) -> anyhow::Result<Self> {
             let controller = ControllerBuilder::new()
                 .freq(800_000)
                 .dma(5)
@@ -111,7 +113,7 @@ pub mod hardware {
                         .build(),
                 )
                 .build()?;
-            Ok(Self { controller, count, color_order })
+            Ok(Self { controller, count })
         }
     }
 
@@ -122,8 +124,7 @@ pub mod hardware {
     impl PixelStrip for NeoPixelStrip {
         fn set(&mut self, index: usize, color: Color) {
             let leds = self.controller.leds_mut(0);
-            let c = self.color_order.apply(color);
-            leds[index] = [c[0], c[1], c[2], 0];
+            leds[index] = [color[0], color[1], color[2], 0];
         }
         fn len(&self) -> usize { self.count }
         fn show(&mut self) {

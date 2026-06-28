@@ -88,8 +88,12 @@ pub async fn post_command(
             (Some(from), Some(to)) => Some(Command::MoveInPlaylist(from, to)),
             _ => None,
         },
-        "set_speed" => req.value.map(Command::SetSpeed),
-        "set_brightness" => req.value.map(Command::SetBrightness),
+        "set_speed"       => req.value.map(Command::SetSpeed),
+        "set_brightness"  => req.value.map(Command::SetBrightness),
+        "set_gamma"       => req.value.map(Command::SetGamma),
+        "set_color_order" => req.effect.clone().map(Command::SetColorOrder),
+        "set_num_pixels"  => req.value_ms.map(|n| Command::SetNumPixels(n as usize)),
+        "set_gpio_pin"    => req.value_ms.map(|p| Command::SetGpioPin(p as i32)),
         _ => None,
     };
 

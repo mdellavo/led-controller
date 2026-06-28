@@ -267,6 +267,48 @@
       margin-top: 0.75rem;
     }
 
+    /* Hardware settings */
+    .hw-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      margin-top: 0.75rem;
+    }
+    .hw-row:first-child { margin-top: 0; }
+
+    .hw-row label {
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      font-weight: 500;
+      flex-shrink: 0;
+    }
+
+    .hw-row .hw-input-group {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+
+    input[type=number] {
+      width: 72px;
+      padding: 0.5rem 0.625rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 0.875rem;
+      text-align: right;
+    }
+    input[type=number]:focus { outline: none; border-color: var(--accent); }
+
+    .hw-note {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      margin-top: 0.875rem;
+      line-height: 1.4;
+    }
+
     /* Error toast */
     #error-toast {
       position: fixed;
@@ -377,6 +419,46 @@
           <div class="fade-value" id="fade-out-val">3.0s</div>
         </div>
       </div>
+    </div>
+    <!-- Hardware Settings -->
+    <div class="card">
+      <div class="card-title">Hardware Settings</div>
+
+      <div class="hw-row">
+        <label>Color order</label>
+        <select id="color-order" style="flex:0;min-width:90px">
+          <option value="rgb">RGB</option>
+          <option value="grb">GRB</option>
+          <option value="bgr">BGR</option>
+          <option value="rbg">RBG</option>
+          <option value="brg">BRG</option>
+          <option value="gbr">GBR</option>
+        </select>
+      </div>
+
+      <div class="fade-field" style="margin-top:0.875rem">
+        <label>Gamma correction</label>
+        <input type="range" id="gamma" min="1.0" max="3.5" step="0.1" value="2.2">
+        <div class="fade-value" id="gamma-val">2.2</div>
+      </div>
+
+      <div class="hw-row" style="margin-top:0.875rem">
+        <label>LED count</label>
+        <div class="hw-input-group">
+          <input type="number" id="num-pixels" min="1" max="1000" value="60">
+          <button class="btn-secondary" id="btn-apply-pixels" style="flex:0;white-space:nowrap">Apply</button>
+        </div>
+      </div>
+
+      <div class="hw-row">
+        <label>GPIO pin</label>
+        <div class="hw-input-group">
+          <input type="number" id="gpio-pin" min="1" max="40" value="18">
+          <button class="btn-secondary" id="btn-apply-gpio" style="flex:0;white-space:nowrap">Apply</button>
+        </div>
+      </div>
+
+      <div class="hw-note">LED count and GPIO pin changes reinitialize the hardware and restart the active effect.</div>
     </div>
   </div>
 
