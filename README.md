@@ -19,6 +19,27 @@ A Rust web server for controlling WS2812B LED strips (NeoPixels) on a Raspberry 
 - `NullPixels` dev mode (no hardware required) with debug logging
 - Single binary deployment — no runtime dependencies on the target beyond the binary itself
 
+## Changelog
+
+**Current**
+- Persist UI state (playlist, speed, brightness, gamma, color order, durations) across restarts via `led-state.json`
+- GPIO pin, pixel count, color order, and gamma configurable live from the web UI
+- Sub-pixel antialiasing on moving effects (Chase, Cylon, KITT, Meteor, Bouncing Balls) — point sources split brightness between adjacent LEDs
+- Frame-rate independent decay — trail fades scale by delta time, stable at any speed setting
+- Gamma correction LUT applied at hardware write (default 2.2, configurable)
+- Software brightness slider (0–100%)
+- Effect speed slider (0.1×–10×)
+- Chase effect randomises colour on each lap
+- Playlist loops back to index 0 at end
+- Color channel order configurable via `--color-order` flag and web UI
+
+**Initial release**
+- Axum web server with REST API
+- 23 built-in effects, each running in its own OS thread
+- Smooth fade-in / fade-out / crossfade transitions with configurable durations
+- Playlist management: add, remove, drag-to-reorder, shuffle, auto-advance
+- `NullPixels` dev mode, cross-compilation via `build-pi.sh`
+
 ## Hardware
 
 - Raspberry Pi (any model with GPIO)
