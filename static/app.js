@@ -335,7 +335,7 @@ const renderState = (state) => {
       const sel = document.getElementById(id);
       const prev = sel.value;
       sel.innerHTML = '';
-      state.effects.forEach((name) => {
+      [...state.effects].sort((a, b) => a.localeCompare(b)).forEach((name) => {
         const opt = document.createElement('option');
         opt.value = name;
         opt.textContent = effectLabel(name);
