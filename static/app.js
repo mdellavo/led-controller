@@ -36,6 +36,17 @@ const EFFECT_ICONS = {
   'Juggle':                '🤹',
   'Plasma':                '🔮',
   'Drip':                  '💧',
+  'Lava Lamp':             '🌋',
+  'Fireworks':             '💥',
+  'Pendulum':              '⏳',
+  'Ripple':                '💦',
+  'Pacifica':              '🌊',
+  'Gradient Cycle':        '🌅',
+  'Pride':                 '🏳️‍🌈',
+  'Christmas':             '🎄',
+  'Heartbeat':             '💓',
+  'Morse Code':            '📡',
+  'Comets':                '🌠',
 };
 
 const effectLabel = (name) => EFFECT_ICONS[name] ? `${EFFECT_ICONS[name]} ${name}` : name;

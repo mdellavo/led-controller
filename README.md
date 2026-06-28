@@ -1,29 +1,39 @@
 # LED Controller
 
-A Rust web server for controlling WS2812B LED strips (NeoPixels) on a Raspberry Pi. Effects run in their own threads, transitions between effects are crossfaded, and everything is controllable from a browser.
+A Rust web server for controlling WS2812B LED strips (NeoPixels) on a Raspberry Pi. Effects are written in Lua and hot-loaded at startup, transitions between effects are crossfaded, and everything is controllable from a browser.
 
 ## Features
 
-- Web control panel: start, stop, next, effect picker, playlist management
+- Web control panel: start, stop, next, effect picker with description tooltip, playlist management
 - Smooth transitions: fade in on start, fade out on stop, crossfade when switching effects — each with a configurable duration (default 3 s)
 - Sub-pixel antialiasing on all moving effects — point sources split brightness between adjacent LEDs for smooth, flicker-free motion
 - Frame-rate independent animation — all effects scale by delta time, stable at any CPU load or speed setting
 - Gamma correction — perceptual brightness LUT applied at hardware write (configurable exponent, default 2.2)
 - Auto-advance: configurable per-effect play time before moving to the next playlist entry
 - Full playlist management: add, remove, drag-to-reorder, shuffle; drag works on both desktop and mobile touch
-- 23 built-in effects (see below)
-- Each effect runs in its own OS thread
-- Pluggable effect system — add a new effect in one file
+- **48 effects** — all written in Lua, loaded from the `effects/` directory at startup
+- Lua effect system — add or edit effects without recompiling; any `.lua` file in `effects/` is registered automatically
+- Per-effect descriptions shown in the UI — each effect file declares a `description` string
+- Status box shows current effect name, play timer (updated every second), and achieved FPS (updated every 5 s)
+- Graceful shutdown — SIGINT/SIGTERM triggers a 500 ms fade to black before exiting
 - Persistent state — playlist, speed, brightness, gamma, color order, and all durations are saved to `led-state.json` and restored on restart
 - Hardware settings configurable live from the web UI: GPIO pin, pixel count, color order, gamma
 - WebSocket push — UI updates within one frame (~16 ms) on any state change; reconnects automatically
 - Mobile-friendly UI — 44 px touch targets, pointer-event drag-to-reorder, always-visible controls on touch devices
 - `NullPixels` dev mode (no hardware required) with debug logging
-- Single binary deployment — no runtime dependencies on the target beyond the binary itself
+- Single binary deployment — Lua VM is vendored; no runtime dependencies on the target beyond the binary and the `effects/` directory
 
 ## Changelog
 
 **Current**
+- 48 effects, all running as Lua scripts loaded from `effects/` at startup
+- Lua effect system: hot-load effects without recompiling; each file exports `name`, `description`, `init(n)`, and `update(buf, dt)`
+- Per-effect description shown below the effect selector in the web UI
+- Status box: live play timer (resets on effect change) and FPS counter
+- Graceful shutdown: SIGINT/SIGTERM fades the strip to black over 500 ms before the process exits
+- Emoji icons for all 48 effects in the web UI
+
+**v0.2**
 - Periodic FPS log every 5 seconds at `info` level showing actual achieved frame rate
 - Speed slider range extended to 10×
 - WebSocket push replaces 500 ms polling — UI updates within one frame on any state change, with auto-reconnect
@@ -34,12 +44,12 @@ A Rust web server for controlling WS2812B LED strips (NeoPixels) on a Raspberry 
 - Frame-rate independent decay — trail fades scale by delta time, stable at any speed setting
 - Gamma correction LUT applied at hardware write (default 2.2, configurable)
 - Software brightness slider (0–100%)
-- Effect speed slider (0.1×–10×)
+- Effect speed slider (0.1×–10.0×)
 - Chase effect randomises colour on each lap
 - Playlist loops back to index 0 at end
 - Color channel order configurable via `--color-order` flag and web UI
 
-**Initial release**
+**v0.1**
 - Axum web server with REST API
 - 23 built-in effects, each running in its own OS thread
 - Smooth fade-in / fade-out / crossfade transitions with configurable durations
@@ -156,13 +166,15 @@ Script flags (before `--`):
 
 ### On the Raspberry Pi
 
-Once the binary is deployed:
+Once the binary and the `effects/` directory are deployed:
 
 ```bash
 sudo ~/led-controller
 ```
 
 `sudo` is required for GPIO/DMA access. The server listens on `0.0.0.0:3000` — open `http://<pi-ip>:3000` from any device on the network.
+
+The `effects/` directory must be present in the working directory (or pass `--effects-dir` to specify a different path).
 
 ### Running as a systemd service
 
@@ -186,7 +198,7 @@ WantedBy=multi-user.target
 sudo systemctl enable --now leds
 ```
 
-State is written to `led-state.json` in `WorkingDirectory`, so the strip resumes exactly where it left off after a reboot or service restart.
+State is written to `led-state.json` in `WorkingDirectory`, so the strip resumes exactly where it left off after a reboot or service restart. Copy the `effects/` directory alongside the binary.
 
 ## Configuration
 
@@ -204,11 +216,12 @@ Options:
       --fade-in-ms <FADE_IN_MS>              Fade-in duration in milliseconds [default: 3000, or saved]
       --fade-out-ms <FADE_OUT_MS>            Fade-out duration in milliseconds [default: 3000, or saved]
       --crossfade-ms <CROSSFADE_MS>          Crossfade duration in milliseconds [default: 3000, or saved]
-      --effect-duration-ms <MS>              Time per effect before auto-advancing (0 = infinite) [default: 0, or saved]
+      --effect-duration-ms <MS>             Time per effect before auto-advancing (0 = infinite) [default: 0, or saved]
       --color-order <COLOR_ORDER>            Physical color channel order (e.g. rgb, grb, bgr) [default: rgb, or saved]
       --speed <SPEED>                        Effect speed multiplier [default: 1.0, or saved]
       --brightness-scale <BRIGHTNESS_SCALE>  Software brightness scale 0.0–1.0 [default: 1.0, or saved]
       --gamma <GAMMA>                        Gamma correction exponent [default: 2.2, or saved]
+      --effects-dir <EFFECTS_DIR>            Directory to scan for Lua effect scripts [default: effects]
   -h, --help                                 Print help
 ```
 
@@ -234,9 +247,9 @@ Open `http://<pi-ip>:3000` in a browser.
 
 | Section | Controls |
 |---|---|
-| **Status** | Coloured dot (green = running, amber = transitioning, grey = stopped) + current effect name |
+| **Status** | Coloured dot (green = running, amber = transitioning, grey = stopped) + current effect name + play timer + FPS |
 | **Controls** | Start, Next, Stop |
-| **Select Effect** | Dropdown of all registered effects + Play button to jump to it immediately |
+| **Select Effect** | Dropdown of all registered effects with description tooltip + Play button to jump to it immediately |
 | **Playlist** | Ordered list of effects to cycle through. Drag `⠿` to reorder, click `✕` to remove, click effect name to play it. Dropdown + **Add** to append any effect. **Shuffle** to randomise order. |
 | **Speed** | Multiplier applied to every effect's time delta (0.1× – 10.0×, live) |
 | **Brightness** | Software brightness scale applied to all pixel output (0–100%, live) |
@@ -246,27 +259,108 @@ Open `http://<pi-ip>:3000` in a browser.
 
 ## Effects
 
+All 48 effects are Lua scripts in the `effects/` directory.
+
+### Classic
+
 | Effect | Description |
 |---|---|
-| Rainbow | Full-strip colour wheel sweep |
-| Random Fade | Sparks that ignite and decay at random positions |
-| Chase | Colour comet with antialiased fading tail; randomises colour on each lap |
-| Sparkle | White twinkle with smooth per-pixel brightness transitions |
-| Strobe / Strobe Red | Rapid flash burst followed by a pause |
-| Cylon | Larson scanner — bright eye bouncing left↔right with a fading tail |
-| KITT | Centre-outward Larson scanner |
-| Halloween Eyes | Pair of glowing eyes that appear at a random position and fade out |
-| Twinkle | Random pixels lit in a fixed colour |
-| Random Twinkle | Random pixels each with a random colour |
-| Snow Sparkle | Dim white background with bright white sparkles |
-| Running Lights | Sine-wave brightness pattern chasing along the strip |
-| Color Wipe Red/Green/Blue | Sequential pixel fill then clear, looping |
-| Theatre Chase | Every 3rd pixel marching, theatre-marquee style |
-| Theatre Chase Rainbow | Theatre chase with rainbow colour cycling |
-| Fire | Realistic flame simulation with cooling and sparking physics |
-| Bouncing Balls | Gravity-physics balls bouncing on a vertical strip |
-| Meteor Rain | Meteor with antialiased head and glowing decaying tail |
-| Solid Red/Green/Blue/White | Static solid colour |
+| 🌈 Rainbow | Full-strip colour wheel sweep |
+| 🎆 Random Fade | Sparks that ignite and decay at random positions |
+| 💨 Chase | Colour comet with antialiased fading tail; randomises colour on each lap |
+| ✨ Sparkle | White twinkle with smooth per-pixel brightness transitions |
+| ⚡ Strobe | Rapid flash burst followed by a pause |
+| 🔴 Strobe Red | Red-only rapid strobe |
+| 👁️ Cylon | Larson scanner — bright eye bouncing left↔right with a fading tail |
+| 🚗 KITT | Centre-outward Larson scanner |
+| 🎃 Halloween Eyes | Pair of glowing eyes that appear at a random position and fade out |
+| ⭐ Twinkle | Random pixels lit in a fixed colour |
+| 🎨 Random Twinkle | Random pixels each with a random colour |
+| ❄️ Snow Sparkle | Dim white background with bright white sparkles |
+| 🏃 Running Lights | Sine-wave brightness pattern chasing along the strip |
+| 🌿 Running Lights Green | Green sine-wave brightness chase |
+| 🟥 Color Wipe Red | Sequential red pixel fill then clear, looping |
+| 🟩 Color Wipe Green | Sequential green pixel fill then clear, looping |
+| 🟦 Color Wipe Blue | Sequential blue pixel fill then clear, looping |
+| 🎭 Theatre Chase | Every 3rd pixel marching, theatre-marquee style |
+| 🎪 Theatre Chase Rainbow | Theatre chase with rainbow colour cycling |
+| 🔥 Fire | Realistic flame simulation with cooling and sparking physics |
+| 🎱 Bouncing Balls | Gravity-physics balls bouncing with antialiased sub-pixel motion |
+| ☄️ Meteor Rain | Meteor with antialiased head and glowing decaying tail |
+| 🔴 Solid Red | Static solid red |
+| 🟢 Solid Green | Static solid green |
+| 🔵 Solid Blue | Static solid blue |
+| ⬜ Solid White | Static solid white |
+
+### Extended
+
+| Effect | Description |
+|---|---|
+| 🫁 Breathing | Whole-strip brightness pulses in and out like slow breathing |
+| 🕯️ Candlelight | Warm flickering flame simulation with random brightness variation |
+| 🌀 Color Cycle | Full-strip hue rotation through the colour wheel |
+| 🌌 Aurora | Slow shifting bands of green and teal like the northern lights |
+| 🚨 Police Lights | Alternating red and blue police strobe |
+| 🌩️ Lightning | Occasional white flash bursts like distant lightning |
+| 🎊 Confetti | Random coloured sparkles sprinkled across a fading background |
+| 〰️ Sinelon | Single coloured dot racing back and forth on a fading trail |
+| 🤹 Juggle | Several dots in different colours chasing at different speeds |
+| 🔮 Plasma | Overlapping sine-wave colour fields creating a shifting plasma |
+| 💧 Drip | Drops of colour fall from a random point and splatter at the bottom |
+
+### New
+
+| Effect | Description |
+|---|---|
+| 🌋 Lava Lamp | Slow warm blobs drift through a dim red background |
+| 💥 Fireworks | Rockets launch from the base, reach an apex, and burst into colorful fragments |
+| ⏳ Pendulum | A glowing dot swings with realistic pendulum physics, slowing at each end |
+| 💦 Ripple | Random tap points send expanding rings of light that fade as they travel outward |
+| 🌊 Pacifica | Three-layer ocean wave simulation in deep blue-green |
+| 🌅 Gradient Cycle | Smooth gradient between two complementary colors that slowly scrolls |
+| 🏳️‍🌈 Pride | Six-color pride flag mapped across the strip and slowly scrolling |
+| 🎄 Christmas | Alternating red and green bands with a slow white twinkle overlay |
+| 💓 Heartbeat | A red lub-dub double pulse at 72 BPM with a long dark pause between beats |
+| 📡 Morse Code | Flashes "SOS" in International Morse Code on a repeating loop |
+| 🌠 Comets | Three comets of different colors chase each other at different speeds |
+
+## Lua effect API
+
+Each `.lua` file in `effects/` is auto-discovered at startup. A file must define:
+
+```lua
+name        = "My Effect"          -- display name in UI
+description = "One-line summary"   -- shown below the effect picker
+
+function init(n)       -- called once; n = pixel count
+    -- set up local state here
+end
+
+function update(buf, dt)  -- called every frame; dt = seconds since last frame
+    -- write pixels, return true to keep running
+    return true
+end
+```
+
+### Buffer methods
+
+| Method | Description |
+|---|---|
+| `buf:len()` | Number of pixels |
+| `buf:set(i, r, g, b)` | Set pixel `i` (0-based) to exact RGB |
+| `buf:get(i)` → `r, g, b` | Read current pixel value |
+| `buf:clear()` | Set all pixels to black |
+| `buf:plot(pos, r, g, b, alpha)` | Sub-pixel antialiased write at fractional position (wraps via `rem_euclid`) |
+| `buf:fade(per_second, dt)` | Multiply all pixels by `per_second ^ dt` — frame-rate-independent trail decay |
+
+`buf:plot` splits brightness between the two adjacent integer pixels by the fractional part, giving smooth motion without pixel-level jitter. `buf:fade` keeps trail lengths consistent regardless of frame rate or speed setting — use `0.85^60` to mean "decay to 85% at 60 fps per frame".
+
+### Adding an effect
+
+1. Create `effects/my_effect.lua` with the template above.
+2. Restart the server (or redeploy the `effects/` directory).
+
+The effect appears in the web UI dropdown automatically. No Rust code changes needed.
 
 ## API
 
@@ -286,6 +380,9 @@ Reconnect automatically on close; the server resends the full current state on e
   "playlist": ["Rainbow", "Fire", "Meteor Rain"],
   "playlist_index": 1,
   "effects": ["Rainbow", "Random Fade", "Chase", "..."],
+  "effect_descriptions": { "Rainbow": "Full-strip colour wheel sweep", "..." : "..." },
+  "effect_elapsed_secs": 42,
+  "fps": 59.8,
   "fade_in_ms": 3000,
   "fade_out_ms": 3000,
   "crossfade_ms": 3000,
@@ -328,79 +425,19 @@ Reconnect automatically on close; the server resends the full current state on e
 | `set_num_pixels` | `value_ms` | Reinitialize with a new pixel count |
 | `set_gpio_pin` | `value_ms` | Reinitialize hardware on a different GPIO pin |
 
-## Adding an effect
-
-1. Create `src/effects/myeffect.rs`:
-
-```rust
-use std::time::Duration;
-use crate::effects::{Effect, Buffer};
-
-pub struct MyEffect {
-    time: f32,
-}
-
-impl MyEffect {
-    pub fn new() -> Self { Self { time: 0.0 } }
-}
-
-impl Effect for MyEffect {
-    fn name(&self) -> &'static str { "My Effect" }
-
-    fn update(&mut self, buffer: &mut Buffer, delta: Duration) -> bool {
-        self.time += delta.as_secs_f32();
-        for pixel in buffer.iter_mut() {
-            *pixel = [0, 0, 0]; // write RGB values
-        }
-        true // return false to signal natural completion
-    }
-}
-```
-
-Use `crate::effects::plot(buffer, pos, color, alpha)` for any moving point source — it splits brightness between adjacent LEDs by the fractional position for smooth antialiased motion. Use `crate::effects::fade_buffer(buffer, per_second, dt)` for trail decay that stays consistent across frame rates and speed settings.
-
-2. Register it in `src/effects/mod.rs`:
-
-```rust
-pub mod myeffect;
-
-pub fn default_registry(num_pixels: usize) -> EffectRegistry {
-    let mut r = EffectRegistry::new();
-    // ... existing effects ...
-    r.register("My Effect", || Box::new(myeffect::MyEffect::new()));
-    r
-}
-```
-
-The effect appears in the web UI dropdown and playlist immediately.
-
 ## Project structure
 
 ```
 src/
-├── main.rs              entry point — parses CLI flags, wires Axum server and runner
+├── main.rs              entry point — CLI flags, Axum server, graceful shutdown
 ├── pixels.rs            PixelStrip trait, NullPixels (dev), NeoPixelStrip (hardware), gamma LUT
 ├── runner.rs            effect thread management, fade/crossfade state machine, playlist,
 │                        persistent state, hardware reinit factories
 ├── api.rs               Axum route handlers
 └── effects/
-    ├── mod.rs           Effect trait, EffectRegistry, plot/fade_buffer helpers, default_registry()
-    ├── rainbow.rs       full-strip colour wheel sweep
-    ├── fade.rs          random sparks that ignite and decay
-    ├── chase.rs         colour comet with fading tail
-    ├── sparkle.rs       white twinkle with smooth brightness
-    ├── solid.rs         static solid colour
-    ├── strobe.rs        rapid flash burst
-    ├── cylon.rs         Larson scanner (Cylon + KITT variants)
-    ├── halloween_eyes.rs glowing eyes that appear and fade
-    ├── twinkle.rs       random pixel twinkle (fixed + random colour)
-    ├── snow_sparkle.rs  dim background with bright sparkles
-    ├── running_lights.rs sine-wave brightness chase
-    ├── color_wipe.rs    sequential pixel fill
-    ├── theatre_chase.rs theatre-marquee march (solid + rainbow)
-    ├── fire.rs          flame simulation
-    ├── bouncing_balls.rs gravity-physics bouncing balls
-    └── meteor.rs        meteor with decaying tail
+    ├── mod.rs           Effect trait, EffectRegistry (with Lua auto-load), LuaBuf helpers
+    └── lua_effect.rs    LuaEffect wrapper — Lua VM per effect, probe_metadata
+effects/                 48 Lua effect scripts (auto-discovered at startup)
 static/
 ├── index.html           control panel (embedded in binary via include_str!)
 └── app.js               frontend JS (embedded in binary via include_str!)
@@ -432,3 +469,4 @@ led-state.json           persisted UI state (created automatically on first run)
 | Effect duration expires | Auto-crossfade to next playlist entry; timer resets when effect reaches full Running state |
 | Playlist reaches end | Wraps back to index 0 |
 | GPIO pin or pixel count changed | Current effect stops, hardware reinitializes, effect restarts with new settings |
+| SIGINT / SIGTERM received | Strip fades to black over 500 ms, then process exits cleanly |
