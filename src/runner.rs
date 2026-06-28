@@ -185,6 +185,7 @@ impl From<&SharedState> for PersistentState {
 // --------------------------------------------------------------------------
 
 pub enum Command {
+    Shutdown,
     Start,
     Stop,
     Next,
@@ -337,6 +338,13 @@ impl Runner {
     pub fn send(&self, cmd: Command) {
         let _ = self.tx.try_send(cmd);
     }
+
+    /// Signal the run loop to fade to black then exit, and block until it does.
+    pub fn shutdown(&self) {
+        let _ = self.tx.try_send(Command::Shutdown);
+        // Fade takes 500 ms; give it 800 ms to be safe.
+        thread::sleep(Duration::from_millis(800));
+    }
 }
 
 // --------------------------------------------------------------------------
@@ -418,6 +426,8 @@ fn run_loop(
     let mut last_is_running = false;
     let mut fps_frames: u32 = 0;
     let mut fps_window = Instant::now();
+    let mut shutting_down = false;
+    let mut shutdown_alpha: f32 = 1.0;
 
     loop {
         let frame_start = Instant::now();
@@ -427,6 +437,10 @@ fn run_loop(
         while let Ok(cmd) = rx.try_recv() {
             dirty = true;
             match cmd {
+                Command::Shutdown => {
+                    shutting_down = true;
+                    shutdown_alpha = 1.0;
+                }
                 Command::SetFadeInMs(ms) => {
                     fade_in_dur = ms as f32 / 1000.0;
                     if let Ok(mut s) = shared.lock() { s.fade_in_ms = ms; }
@@ -649,12 +663,20 @@ fn run_loop(
 
         // --- write to hardware: apply color order, brightness, gamma ---
         let bri = f32::from_bits(brightness.load(Ordering::Relaxed));
+        let effective_bri = bri * if shutting_down { shutdown_alpha } else { 1.0 };
         for (i, color) in output.iter().enumerate() {
             let c = color_order.apply(*color);
-            let c = c.map(|v| gamma_lut[(v as f32 * bri) as usize]);
+            let c = c.map(|v| gamma_lut[((v as f32 * effective_bri) as usize).min(255)]);
             pixels.set(i, c);
         }
         pixels.show();
+
+        if shutting_down {
+            shutdown_alpha = (shutdown_alpha - dt * 2.0).max(0.0);
+            if shutdown_alpha <= 0.0 {
+                break;
+            }
+        }
 
         // --- update shared state; push to WebSocket subscribers on any change ---
         let is_running          = state.is_active();
