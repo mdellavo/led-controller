@@ -259,70 +259,68 @@ Open `http://<pi-ip>:3000` in a browser.
 
 ## Effects
 
-All 48 effects are Lua scripts in the `effects/` directory.
-
-### Classic
+All 58 effects are Lua scripts in the `effects/` directory.
 
 | Effect | Description |
 |---|---|
-| 🌈 Rainbow | Full-strip colour wheel sweep |
-| 🎆 Random Fade | Sparks that ignite and decay at random positions |
-| 💨 Chase | Colour comet with antialiased fading tail; randomises colour on each lap |
-| ✨ Sparkle | White twinkle with smooth per-pixel brightness transitions |
-| ⚡ Strobe | Rapid flash burst followed by a pause |
-| 🔴 Strobe Red | Red-only rapid strobe |
-| 👁️ Cylon | Larson scanner — bright eye bouncing left↔right with a fading tail |
-| 🚗 KITT | Centre-outward Larson scanner |
-| 🎃 Halloween Eyes | Pair of glowing eyes that appear at a random position and fade out |
-| ⭐ Twinkle | Random pixels lit in a fixed colour |
-| 🎨 Random Twinkle | Random pixels each with a random colour |
-| ❄️ Snow Sparkle | Dim white background with bright white sparkles |
-| 🏃 Running Lights | Sine-wave brightness pattern chasing along the strip |
-| 🌿 Running Lights Green | Green sine-wave brightness chase |
-| 🟥 Color Wipe Red | Sequential red pixel fill then clear, looping |
-| 🟩 Color Wipe Green | Sequential green pixel fill then clear, looping |
-| 🟦 Color Wipe Blue | Sequential blue pixel fill then clear, looping |
-| 🎭 Theatre Chase | Every 3rd pixel marching, theatre-marquee style |
-| 🎪 Theatre Chase Rainbow | Theatre chase with rainbow colour cycling |
-| 🔥 Fire | Realistic flame simulation with cooling and sparking physics |
-| 🎱 Bouncing Balls | Gravity-physics balls bouncing with antialiased sub-pixel motion |
-| ☄️ Meteor Rain | Meteor with antialiased head and glowing decaying tail |
-| 🔴 Solid Red | Static solid red |
-| 🟢 Solid Green | Static solid green |
-| 🔵 Solid Blue | Static solid blue |
-| ⬜ Solid White | Static solid white |
-
-### Extended
-
-| Effect | Description |
-|---|---|
-| 🫁 Breathing | Whole-strip brightness pulses in and out like slow breathing |
-| 🕯️ Candlelight | Warm flickering flame simulation with random brightness variation |
-| 🌀 Color Cycle | Full-strip hue rotation through the colour wheel |
-| 🌌 Aurora | Slow shifting bands of green and teal like the northern lights |
-| 🚨 Police Lights | Alternating red and blue police strobe |
-| 🌩️ Lightning | Occasional white flash bursts like distant lightning |
-| 🎊 Confetti | Random coloured sparkles sprinkled across a fading background |
-| 〰️ Sinelon | Single coloured dot racing back and forth on a fading trail |
-| 🤹 Juggle | Several dots in different colours chasing at different speeds |
-| 🔮 Plasma | Overlapping sine-wave colour fields creating a shifting plasma |
-| 💧 Drip | Drops of colour fall from a random point and splatter at the bottom |
-
-### New
-
-| Effect | Description |
-|---|---|
-| 🌋 Lava Lamp | Slow warm blobs drift through a dim red background |
-| 💥 Fireworks | Rockets launch from the base, reach an apex, and burst into colorful fragments |
-| ⏳ Pendulum | A glowing dot swings with realistic pendulum physics, slowing at each end |
-| 💦 Ripple | Random tap points send expanding rings of light that fade as they travel outward |
-| 🌊 Pacifica | Three-layer ocean wave simulation in deep blue-green |
-| 🌅 Gradient Cycle | Smooth gradient between two complementary colors that slowly scrolls |
-| 🏳️‍🌈 Pride | Six-color pride flag mapped across the strip and slowly scrolling |
+| 🌌 Aurora | Four overlapping sine-wave bands of green, teal, blue, and purple shimmer at independent speeds |
+| 🦑 Bioluminescence | Deep ocean darkness with expanding blue-green pulses, like disturbed bioluminescent plankton |
+| 🎱 Bouncing Balls | Three balls (red, green, blue) bounce under simulated gravity with energy loss on each bounce |
+| 🫁 Breathing | All pixels pulse in and out on a slow breathing rhythm using a sin² envelope |
+| 🕯️ Candlelight | Warm orange flicker: each pixel drifts toward a random brightness target, with occasional sharp gusts |
+| 💨 Chase | Antialiased comet with a tail proportional to strip length; picks a new random color each lap |
 | 🎄 Christmas | Alternating red and green bands with a slow white twinkle overlay |
+| 🌀 Color Cycle | The whole strip slowly cycles through one solid hue at a time |
+| 🟦 Color Wipe Blue | Fills the strip blue one pixel at a time from one end, then clears it the same way |
+| 🟩 Color Wipe Green | Fills the strip green one pixel at a time from one end, then clears it the same way |
+| 🟥 Color Wipe Red | Fills the strip red one pixel at a time from one end, then clears it the same way |
+| 🌠 Comets | Three comets of different colors chase each other around the strip at different speeds |
+| 🎊 Confetti | Saturated random-hue dots scatter onto a slowly decaying background |
+| 👁️ Cylon | Red Larson-scanner eye bounces back and forth with exponential brightness falloff on either side |
+| 🧬 DNA Helix | Two interlocked sine waves in cyan and orange scroll along the strip like a DNA double helix |
+| 💧 Drip | Colored drops spawn at one end, accelerate under gravity, and splat at the other end |
+| 🔥 Fire | Heat-diffusion simulation: base glows hot, heat rises through a black→red→yellow→white palette |
+| 🪲 Fireflies | Dim drifting dots that randomly glow bright then fade, like fireflies on a summer night |
+| 💥 Fireworks | Rockets launch from the base, reach an apex, and burst into colorful fragments |
+| 🔭 Galaxy | Soft drifting nebula of blues and purples with occasional bright star flares |
+| 🌅 Gradient Cycle | Smooth gradient between two complementary colors that slowly scrolls across the strip |
+| 🎃 Halloween Eyes | A pair of red eyes appears at a random position, holds, fades out, then reappears elsewhere |
 | 💓 Heartbeat | A red lub-dub double pulse at 72 BPM with a long dark pause between beats |
+| 🤹 Juggle | Six differently-colored dots bounce at staggered speeds; their fading trails overlap and blend |
+| 🚗 KITT | Twin red eyes start at center, expand outward to the ends, then contract back together |
+| 🌋 Lava Lamp | Slow warm blobs drift through a dim red background, like a lava lamp |
+| 🌩️ Lightning | Random white strikes flare across the strip, then fade into a flickering blue-white afterglow |
+| ☄️ Meteor Rain | White meteor streaks across the strip leaving a randomly-decaying trail, then resets |
 | 📡 Morse Code | Flashes "SOS" in International Morse Code on a repeating loop |
-| 🌠 Comets | Three comets of different colors chase each other at different speeds |
+| 💡 Neon Sign | Pink neon glow with realistic fluorescent tube flicker, buzz, and occasional dropout |
+| 🫧 Oil Slick | Dark iridescent rainbow sheen slowly shifts across the strip like light on spilled oil |
+| 🌊 Pacifica | Three-layer ocean wave simulation in deep blue-green, inspired by FastLED's Pacifica |
+| ⏳ Pendulum | A glowing dot swings with realistic pendulum physics, slowing at each end |
+| 🔮 Plasma | Four sine waves at different spatial and temporal frequencies combine into a shifting color interference pattern |
+| 🚨 Police Lights | Alternating red/blue half-strip strobes with a brief white center flash between each side |
+| 🏓 Pong | A bright dot bounces between the two ends, getting faster with each hit |
+| 🏳️‍🌈 Pride | Six-color pride flag mapped across the strip and slowly scrolling |
+| 🌈 Rainbow | Colorwheel hue shifts pixel-to-pixel across the strip, cycling through all colors continuously |
+| 🎆 Random Fade | Sparks of random color ignite at random positions, ramp up to peak brightness, then fade out |
+| 🎨 Random Twinkle | Ten random-colored pixels reposition randomly every 100 ms |
+| 💦 Ripple | Random tap points send expanding rings of light that fade as they travel outward |
+| 🏃 Running Lights | Red sine-wave brightness ripples continuously down the strip |
+| 🌿 Running Lights Green | Green sine-wave brightness ripples continuously down the strip |
+| 🏖️ Sand | Sandy particles settle under gravity, then scatter with a periodic shake |
+| 〰️ Sinelon | A single dot rides a sine wave back and forth leaving a fading trail |
+| ❄️ Snow Sparkle | Dim white background with a single bright sparkle that jumps to a new position every 200 ms |
+| 🔵 Solid Blue | Solid static blue |
+| 🟢 Solid Green | Solid static green |
+| 🔴 Solid Red | Solid static red |
+| ⬜ Solid White | Solid static warm white |
+| ✨ Sparkle | Pixels independently ramp to a random peak brightness then fade back to dark |
+| ⚡ Strobe | Ten rapid white flashes in a burst followed by a 1-second pause, then repeat |
+| 🔴 Strobe Red | Ten rapid red flashes in a burst followed by a 1-second pause, then repeat |
+| 🌄 Sunrise | Slow day cycle shifting through night purple, deep red, orange, golden yellow, and back |
+| 🎭 Theatre Chase | Every third pixel is lit and steps along the strip in a marching-lights pattern |
+| 🎪 Theatre Chase Rainbow | Theatre chase with a different colorwheel hue on each lit pixel, advancing with every step |
+| ⭐ Twinkle | Ten white pixels reposition randomly every 100 ms |
+| 🌪️ Twister | Multiple overlapping sine waves at different frequencies create shifting interference patterns |
 
 ## Lua effect API
 
