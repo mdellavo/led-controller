@@ -20,6 +20,35 @@ A Rust web server for controlling WS2812B LED strips (NeoPixels) on a Raspberry 
 - WS2812B / NeoPixel LED strip connected to **GPIO 18** (PWM0)
 - The `rpi_ws281x` C library must be installed on the Pi:
 
+```mermaid
+graph LR
+    PI["🍓 Raspberry Pi"]
+
+    subgraph LS["Level Shifter (BSS138)"]
+        direction TB
+        LV["LV — 3.3V ref"]
+        LGND["GND"]
+        LV1["LV1 — data in"]
+        HV["HV — 5V ref"]
+        HGND["GND"]
+        HV1["HV1 — data out"]
+    end
+
+    LED["💡 WS2812B LED strip"]
+    PSU["🔌 5V Power Supply"]
+
+    PI -->|"3.3V"| LV
+    PI -->|"GND"| LGND
+    PI -->|"GPIO18"| LV1
+
+    HV1 -->|"DIN"| LED
+
+    PSU -->|"5V ref"| HV
+    PSU -->|"shared GND"| HGND
+    PSU -->|"5V VCC"| LED
+    PSU -->|"GND"| LED
+```
+
 ```bash
 sudo apt install -y build-essential cmake libclang-dev
 git clone https://github.com/jgarff/rpi_ws281x
