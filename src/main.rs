@@ -60,6 +60,10 @@ struct Args {
     /// Software brightness scale 0.0–1.0 applied to all pixel output
     #[arg(long, default_value_t = 1.0)]
     brightness_scale: f32,
+
+    /// Gamma correction exponent (2.2 = standard display, higher = darker mid-tones)
+    #[arg(long, default_value_t = 2.2)]
+    gamma: f32,
 }
 
 #[tokio::main]
@@ -102,6 +106,7 @@ async fn main() -> anyhow::Result<()> {
         effect_duration_ms: args.effect_duration_ms,
         speed: args.speed,
         brightness: args.brightness_scale,
+        gamma: args.gamma,
     };
     let runner = Runner::new(pixels, registry, config);
 

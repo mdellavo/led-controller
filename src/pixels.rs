@@ -1,5 +1,16 @@
 pub type Color = [u8; 3];
 
+/// Build a 256-entry gamma correction lookup table.
+/// Maps a linear 0–255 value to a perceptually uniform output.
+/// Standard display gamma is 2.2; LED strips often look better at 2.5–2.8.
+pub fn build_gamma_lut(gamma: f32) -> [u8; 256] {
+    let mut lut = [0u8; 256];
+    for (i, entry) in lut.iter_mut().enumerate() {
+        *entry = ((i as f32 / 255.0).powf(gamma) * 255.0).round() as u8;
+    }
+    lut
+}
+
 /// Maps logical [r, g, b] to the physical byte order the strip expects.
 /// Stored as indices into the source color: e.g. GRB = [1, 0, 2].
 #[derive(Clone, Copy, Debug)]

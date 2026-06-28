@@ -174,6 +174,8 @@ pub struct SharedState {
     pub speed: f32,
     /// Software brightness scale 0.0–1.0 applied to output before writing to hardware
     pub brightness: f32,
+    /// Gamma exponent used for perceptual brightness correction (e.g. 2.2)
+    pub gamma: f32,
 }
 
 // --------------------------------------------------------------------------
@@ -188,12 +190,14 @@ pub struct RunnerConfig {
     pub effect_duration_ms: u64,
     pub speed: f32,
     pub brightness: f32,
+    /// Gamma exponent used for perceptual brightness correction (e.g. 2.2)
+    pub gamma: f32,
 }
 
 impl Default for RunnerConfig {
     fn default() -> Self {
         let ms = DEFAULT_FADE_DURATION.as_millis() as u64;
-        Self { fade_in_ms: ms, fade_out_ms: ms, crossfade_ms: ms, effect_duration_ms: 0, speed: 1.0, brightness: 1.0 }
+        Self { fade_in_ms: ms, fade_out_ms: ms, crossfade_ms: ms, effect_duration_ms: 0, speed: 1.0, brightness: 1.0, gamma: 2.2 }
     }
 }
 
@@ -226,6 +230,7 @@ impl Runner {
             effect_duration_ms: config.effect_duration_ms,
             speed: config.speed,
             brightness: config.brightness,
+            gamma: config.gamma,
         }));
 
         let state_clone = Arc::clone(&shared_state);
@@ -282,6 +287,7 @@ fn run_loop(
     speed: Arc<AtomicU32>,
     brightness: Arc<AtomicU32>,
 ) {
+    let gamma_lut = crate::pixels::build_gamma_lut(config.gamma);
     let black = vec![[0u8; 3]; num_pixels];
     let mut state = RunnerState::Idle;
     let mut playlist: Vec<String> = registry.names().to_vec();
@@ -536,7 +542,7 @@ fn run_loop(
         // --- write to hardware ---
         let bri = f32::from_bits(brightness.load(Ordering::Relaxed));
         for (i, color) in output.iter().enumerate() {
-            let c = color.map(|v| (v as f32 * bri) as u8);
+            let c = color.map(|v| gamma_lut[(v as f32 * bri) as usize]);
             pixels.set(i, c);
         }
         pixels.show();
