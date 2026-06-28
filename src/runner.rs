@@ -409,6 +409,8 @@ fn run_loop(
     let mut effect_duration = config.effect_duration_ms as f32 / 1000.0;
     let mut effect_elapsed: f32 = 0.0;
     let mut last_is_running = false;
+    let mut fps_frames: u32 = 0;
+    let mut fps_window = Instant::now();
 
     loop {
         // --- process incoming commands ---
@@ -668,6 +670,14 @@ fn run_loop(
         if is_running != last_is_running {
             last_is_running = is_running;
             save_state(&shared, &state_file);
+        }
+
+        fps_frames += 1;
+        let fps_elapsed = fps_window.elapsed();
+        if fps_elapsed >= Duration::from_secs(5) {
+            tracing::info!("fps: {:.1}", fps_frames as f32 / fps_elapsed.as_secs_f32());
+            fps_frames = 0;
+            fps_window = Instant::now();
         }
 
         thread::sleep(FRAME_DURATION);
