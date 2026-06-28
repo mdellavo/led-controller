@@ -6,18 +6,23 @@ A Rust web server for controlling WS2812B LED strips (NeoPixels) on a Raspberry 
 
 - Web control panel: start, stop, next, effect picker, playlist management
 - Smooth transitions: fade in on start, fade out on stop, crossfade when switching effects — each with a configurable duration (default 3 s)
+- Sub-pixel antialiasing on all moving effects — point sources split brightness between adjacent LEDs for smooth, flicker-free motion
+- Frame-rate independent animation — all effects scale by delta time, stable at any CPU load or speed setting
+- Gamma correction — perceptual brightness LUT applied at hardware write (configurable exponent, default 2.2)
 - Auto-advance: configurable per-effect play time before moving to the next playlist entry
 - Full playlist management: add, remove, drag-to-reorder, shuffle
 - 23 built-in effects (see below)
 - Each effect runs in its own OS thread
 - Pluggable effect system — add a new effect in one file
+- Persistent state — playlist, speed, brightness, gamma, color order, and all durations are saved to `led-state.json` and restored on restart
+- Hardware settings configurable live from the web UI: GPIO pin, pixel count, color order, gamma
 - `NullPixels` dev mode (no hardware required) with debug logging
 - Single binary deployment — no runtime dependencies on the target beyond the binary itself
 
 ## Hardware
 
 - Raspberry Pi (any model with GPIO)
-- WS2812B / NeoPixel LED strip connected to **GPIO 18** (PWM0)
+- WS2812B / NeoPixel LED strip connected to **GPIO 18** (PWM0) by default
 - The `rpi_ws281x` C library must be installed on the Pi:
 
 ```mermaid
@@ -92,7 +97,7 @@ cargo install cross
 **Pass app flags through with `--`:**
 
 ```bash
-./build-pi.sh --deploy pi@raspberrypi.local -- --pixels 144 --brightness 80 --crossfade-ms 5000
+./build-pi.sh --deploy pi@raspberrypi.local -- --pixels 144 --brightness 80
 ```
 
 **Build only:**
@@ -122,22 +127,6 @@ Script flags (before `--`):
 | `--no-hardware` | off | Build without the hardware feature (NullPixels) |
 | `--deploy user@host` | — | SCP the binary to the Pi after building |
 
-App flags (after `--`, passed through to the binary):
-
-| Flag | Default | Description |
-|---|---|---|
-| `--pixels <n>` | `60` | Number of LEDs in the strip |
-| `--gpio-pin <n>` | `18` | GPIO pin number |
-| `--brightness <n>` | `25` | LED brightness 0–255 |
-| `--port <n>` | `3000` | Port to listen on |
-| `--fade-in-ms <n>` | `3000` | Fade-in duration in milliseconds |
-| `--fade-out-ms <n>` | `3000` | Fade-out duration in milliseconds |
-| `--crossfade-ms <n>` | `3000` | Crossfade duration in milliseconds |
-| `--effect-duration-ms <n>` | `0` | Time each effect plays before auto-advancing (0 = infinite) |
-| `--color-order <str>` | `rgb` | Physical color channel order of the strip (e.g. `rgb`, `grb`, `bgr`) |
-| `--speed <n>` | `1.0` | Effect speed multiplier (0.1 = very slow, 1.0 = normal, 4.0 = very fast) |
-| `--brightness-scale <n>` | `1.0` | Software brightness scale 0.0–1.0 applied to all pixel output |
-
 ### On the Raspberry Pi
 
 Once the binary is deployed:
@@ -157,7 +146,7 @@ Description=LED Controller
 After=network.target
 
 [Service]
-ExecStart=/home/pi/led-controller --effect-duration-ms 30000
+ExecStart=/home/pi/led-controller
 WorkingDirectory=/home/pi
 Restart=on-failure
 User=root
@@ -170,35 +159,47 @@ WantedBy=multi-user.target
 sudo systemctl enable --now leds
 ```
 
+State is written to `led-state.json` in `WorkingDirectory`, so the strip resumes exactly where it left off after a reboot or service restart.
+
 ## Configuration
 
-All options are set via command-line flags. Defaults are shown below:
+Options are set via command-line flags. Most have saved-state equivalents — if the flag is omitted, the value from the last run is used. Explicit CLI flags always override saved state.
 
 ```
 Usage: led-controller [OPTIONS]
 
 Options:
-      --pixels <PIXELS>                      Number of LEDs in the strip [default: 60]
-      --gpio-pin <GPIO_PIN>                  GPIO pin number (hardware feature only) [default: 18]
-      --brightness <BRIGHTNESS>              LED brightness 0–255 (hardware feature only) [default: 25]
+      --pixels <PIXELS>                      Number of LEDs in the strip [default: 60, or saved]
+      --gpio-pin <GPIO_PIN>                  GPIO pin number (hardware only) [default: 18, or saved]
+      --brightness <BRIGHTNESS>              Hardware PWM brightness 0–255 [default: 25]
       --port <PORT>                          Port to listen on [default: 3000]
-      --fade-in-ms <FADE_IN_MS>              Fade-in duration in milliseconds [default: 3000]
-      --fade-out-ms <FADE_OUT_MS>            Fade-out duration in milliseconds [default: 3000]
-      --crossfade-ms <CROSSFADE_MS>          Crossfade duration in milliseconds [default: 3000]
-      --effect-duration-ms <EFFECT_DUR_MS>   Time per effect before auto-advancing (0 = infinite) [default: 0]
-      --color-order <COLOR_ORDER>            Physical color channel order of the strip [default: rgb]
-      --speed <SPEED>                        Effect speed multiplier [default: 1.0]
-      --brightness-scale <BRIGHTNESS_SCALE>  Software brightness scale 0.0–1.0 [default: 1.0]
+      --state-file <STATE_FILE>              Path to persist state across restarts [default: led-state.json]
+      --fade-in-ms <FADE_IN_MS>              Fade-in duration in milliseconds [default: 3000, or saved]
+      --fade-out-ms <FADE_OUT_MS>            Fade-out duration in milliseconds [default: 3000, or saved]
+      --crossfade-ms <CROSSFADE_MS>          Crossfade duration in milliseconds [default: 3000, or saved]
+      --effect-duration-ms <MS>              Time per effect before auto-advancing (0 = infinite) [default: 0, or saved]
+      --color-order <COLOR_ORDER>            Physical color channel order (e.g. rgb, grb, bgr) [default: rgb, or saved]
+      --speed <SPEED>                        Effect speed multiplier [default: 1.0, or saved]
+      --brightness-scale <BRIGHTNESS_SCALE>  Software brightness scale 0.0–1.0 [default: 1.0, or saved]
+      --gamma <GAMMA>                        Gamma correction exponent [default: 2.2, or saved]
   -h, --help                                 Print help
 ```
 
-Example — 144-pixel strip on GPIO 12, 30 s per effect with 5 s crossfades:
+Example — 144-pixel strip on GPIO 12, 30 s per effect:
 
 ```bash
-sudo ./led-controller --pixels 144 --gpio-pin 12 --brightness 80 --effect-duration-ms 30000 --crossfade-ms 5000
+sudo ./led-controller --pixels 144 --gpio-pin 12 --brightness 80 --effect-duration-ms 30000
 ```
 
-All timing values can also be adjusted live from the web UI without restarting.
+All settings (except `--brightness`, `--port`, and `--state-file`) can also be changed live from the web UI and are persisted automatically.
+
+## State persistence
+
+UI state is saved to `led-state.json` (or the path given by `--state-file`) whenever it changes. On restart the saved values are loaded automatically. The file is plain JSON and can be edited by hand.
+
+What is persisted: playlist order and position, speed, software brightness, gamma, color order, all fade/transition durations, effect duration, GPIO pin, pixel count, and whether the strip was running.
+
+Explicit CLI flags always override saved values for that session, but subsequent web UI changes will be saved over them.
 
 ## Web UI
 
@@ -214,6 +215,7 @@ Open `http://<pi-ip>:3000` in a browser.
 | **Brightness** | Software brightness scale applied to all pixel output (0–100%, live) |
 | **Effect Duration** | How long each effect plays before auto-advancing (0 = manual only) |
 | **Transition Durations** | Separate sliders for fade-in, crossfade, and fade-out |
+| **Hardware Settings** | Color order (live), gamma (live), LED count and GPIO pin (apply button — reinitializes hardware) |
 
 ## Effects
 
@@ -221,7 +223,7 @@ Open `http://<pi-ip>:3000` in a browser.
 |---|---|
 | Rainbow | Full-strip colour wheel sweep |
 | Random Fade | Sparks that ignite and decay at random positions |
-| Chase | Colour comet with a fading tail |
+| Chase | Colour comet with antialiased fading tail; randomises colour on each lap |
 | Sparkle | White twinkle with smooth per-pixel brightness transitions |
 | Strobe / Strobe Red | Rapid flash burst followed by a pause |
 | Cylon | Larson scanner — bright eye bouncing left↔right with a fading tail |
@@ -236,7 +238,7 @@ Open `http://<pi-ip>:3000` in a browser.
 | Theatre Chase Rainbow | Theatre chase with rainbow colour cycling |
 | Fire | Realistic flame simulation with cooling and sparking physics |
 | Bouncing Balls | Gravity-physics balls bouncing on a vertical strip |
-| Meteor Rain | Meteor with a glowing decaying tail |
+| Meteor Rain | Meteor with antialiased head and glowing decaying tail |
 | Solid Red/Green/Blue/White | Static solid colour |
 
 ## API
@@ -258,7 +260,11 @@ All endpoints accept/return JSON.
   "crossfade_ms": 3000,
   "effect_duration_ms": 30000,
   "speed": 1.0,
-  "brightness": 1.0
+  "brightness": 1.0,
+  "gamma": 2.2,
+  "num_pixels": 60,
+  "gpio_pin": 18,
+  "color_order": "rgb"
 }
 ```
 
@@ -284,8 +290,12 @@ All endpoints accept/return JSON.
 | `set_fade_out` | `value_ms` | Set fade-out duration |
 | `set_crossfade` | `value_ms` | Set crossfade duration |
 | `set_effect_duration` | `value_ms` | Set per-effect play time (0 = infinite) |
-| `set_speed` | `value` | Set speed multiplier (float, 0.1–4.0) |
+| `set_speed` | `value` | Set speed multiplier (float, 0.1–10.0) |
 | `set_brightness` | `value` | Set software brightness scale (float, 0.0–1.0) |
+| `set_gamma` | `value` | Set gamma correction exponent (float, 1.0–4.0) |
+| `set_color_order` | `effect` | Set physical channel order string (e.g. `"grb"`) |
+| `set_num_pixels` | `value_ms` | Reinitialize with a new pixel count |
+| `set_gpio_pin` | `value_ms` | Reinitialize hardware on a different GPIO pin |
 
 ## Adding an effect
 
@@ -316,6 +326,8 @@ impl Effect for MyEffect {
 }
 ```
 
+Use `crate::effects::plot(buffer, pos, color, alpha)` for any moving point source — it splits brightness between adjacent LEDs by the fractional position for smooth antialiased motion. Use `crate::effects::fade_buffer(buffer, per_second, dt)` for trail decay that stays consistent across frame rates and speed settings.
+
 2. Register it in `src/effects/mod.rs`:
 
 ```rust
@@ -336,11 +348,12 @@ The effect appears in the web UI dropdown and playlist immediately.
 ```
 src/
 ├── main.rs              entry point — parses CLI flags, wires Axum server and runner
-├── pixels.rs            PixelStrip trait, NullPixels (dev), NeoPixelStrip (hardware)
-├── runner.rs            effect thread management, fade/crossfade state machine, playlist
+├── pixels.rs            PixelStrip trait, NullPixels (dev), NeoPixelStrip (hardware), gamma LUT
+├── runner.rs            effect thread management, fade/crossfade state machine, playlist,
+│                        persistent state, hardware reinit factories
 ├── api.rs               Axum route handlers
 └── effects/
-    ├── mod.rs           Effect trait, EffectRegistry, default_registry()
+    ├── mod.rs           Effect trait, EffectRegistry, plot/fade_buffer helpers, default_registry()
     ├── rainbow.rs       full-strip colour wheel sweep
     ├── fade.rs          random sparks that ignite and decay
     ├── chase.rs         colour comet with fading tail
@@ -360,18 +373,13 @@ src/
 static/
 ├── index.html           control panel (embedded in binary via include_str!)
 └── app.js               frontend JS (embedded in binary via include_str!)
+led-state.json           persisted UI state (created automatically on first run)
 ```
 
 ## Roadmap / ideas
 
-### Hardware / control
-- **Gamma correction** — apply a gamma lookup table at the hardware write so brightness changes feel perceptually smooth rather than steppy
-- **Per-effect color palette** — let effects draw from a user-chosen set of colors rather than hard-coded values
-- **Segmented effects** — run different effects on different sections of the strip simultaneously
-
 ### UI / usability
 - **Saved presets** — name and store a (effect + speed + brightness + duration) configuration to recall later
-- **Persist state across restarts** — write current state to a small JSON file so the strip comes back in its last state after a reboot or power cut
 - **Dimming schedule** — automatically dim or turn off at a configured time (e.g. midnight), useful for permanent installs
 - **Mobile touch targets** — larger sliders and buttons for comfortable use on a small touchscreen
 - **Basic auth** — single username/password so the UI is not open to everyone on the local network
@@ -379,6 +387,8 @@ static/
 ### Effects
 - **Audio reactive** — sample a USB mic/dongle and drive brightness or color from beat detection or amplitude
 - **Custom color picker** — choose the color for solid/wipe/chase effects from the UI without editing code
+- **Per-effect color palette** — let effects draw from a user-chosen set of colors rather than hard-coded values
+- **Segmented effects** — run different effects on different sections of the strip simultaneously
 
 ### Performance / architecture
 - **WebSocket push** — replace the 500 ms poll with a WebSocket connection for instant UI updates and lower CPU use on the Pi
@@ -393,3 +403,5 @@ static/
 | Switch again mid-crossfade | Outgoing effect dropped; new effect crossfades from the current blended frame |
 | Stop mid-crossfade | Incoming effect fades out from its current blend position |
 | Effect duration expires | Auto-crossfade to next playlist entry; timer resets when effect reaches full Running state |
+| Playlist reaches end | Wraps back to index 0 |
+| GPIO pin or pixel count changed | Current effect stops, hardware reinitializes, effect restarts with new settings |
