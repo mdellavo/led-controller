@@ -413,6 +413,8 @@ fn run_loop(
     let mut fps_window = Instant::now();
 
     loop {
+        let frame_start = Instant::now();
+
         // --- process incoming commands ---
         let mut dirty = false;
         while let Ok(cmd) = rx.try_recv() {
@@ -680,7 +682,10 @@ fn run_loop(
             fps_window = Instant::now();
         }
 
-        thread::sleep(FRAME_DURATION);
+        let elapsed = frame_start.elapsed();
+        if elapsed < FRAME_DURATION {
+            thread::sleep(FRAME_DURATION - elapsed);
+        }
     }
 }
 
