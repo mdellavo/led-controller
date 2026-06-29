@@ -67,6 +67,16 @@ const EFFECT_ICONS = {
   'Sparkler':              '🎇',
   'Easter':                '🐣',
   'Tug of War':            '⚖️',
+  'Matrix Rain':           '💻',
+  'Starfield':             '🌟',
+  'Pendulum Wave':         '🎯',
+  'Snake':                 '🐍',
+  'Murmuration':           '🐦',
+  'Icicles':               '🧊',
+  'Pixel Sort':            '🔢',
+  'Bloom':                 '🌸',
+  'Hypnotic Spiral':       '💫',
+  'Northern Lights':       '🏔️',
 };
 
 const effectLabel = (name) => EFFECT_ICONS[name] ? `${EFFECT_ICONS[name]} ${name}` : name;
