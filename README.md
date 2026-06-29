@@ -11,7 +11,7 @@ A Rust web server for controlling WS2812B LED strips (NeoPixels) on a Raspberry 
 - Gamma correction — perceptual brightness LUT applied at hardware write (configurable exponent, default 2.2)
 - Auto-advance: configurable per-effect play time before moving to the next playlist entry
 - Full playlist management: add, remove, drag-to-reorder, shuffle; drag works on both desktop and mobile touch
-- **48 effects** — all written in Lua, loaded from the `effects/` directory at startup
+- **81 effects** — all written in Lua, loaded from the `effects/` directory at startup
 - Lua effect system — add or edit effects without recompiling; any `.lua` file in `effects/` is registered automatically
 - Per-effect descriptions shown in the UI — each effect file declares a `description` string
 - Status box shows current effect name, play timer (updated every second), and achieved FPS (updated every 5 s)
@@ -26,12 +26,13 @@ A Rust web server for controlling WS2812B LED strips (NeoPixels) on a Raspberry 
 ## Changelog
 
 **Current**
-- 48 effects, all running as Lua scripts loaded from `effects/` at startup
+- 81 effects, all running as Lua scripts loaded from `effects/` at startup
 - Lua effect system: hot-load effects without recompiling; each file exports `name`, `description`, `init(n)`, and `update(buf, dt)`
+- Custom color picker in the web UI — choose a color applied to Solid Color, Color Wipe, Running Lights, Strobe, Meteor Rain, Theatre Chase, and Twinkle without editing code; color randomized on each start
 - Per-effect description shown below the effect selector in the web UI
 - Status box: live play timer (resets on effect change) and FPS counter
 - Graceful shutdown: SIGINT/SIGTERM fades the strip to black over 500 ms before the process exits
-- Emoji icons for all 48 effects in the web UI
+- Emoji icons for all 81 effects in the web UI
 
 **v0.2**
 - Periodic FPS log every 5 seconds at `info` level showing actual achieved frame rate
@@ -259,77 +260,90 @@ Open `http://<pi-ip>:3000` in a browser.
 
 ## Effects
 
-All 68 effects are Lua scripts in the `effects/` directory.
+All 81 effects are Lua scripts in the `effects/` directory.
 
 | Effect | Description |
 |---|---|
 | 🌌 Aurora | Four overlapping sine-wave bands of green, teal, blue, and purple shimmer at independent speeds |
-| 🧩 Cellular Automata | Rule 30 cellular automaton; complex patterns emerge each generation from a simple 3-cell neighborhood rule |
 | 🦑 Bioluminescence | Deep ocean darkness with expanding blue-green pulses, like disturbed bioluminescent plankton |
+| 🌸 Bloom | Rings of color bloom outward from random seed points and fade |
 | 🎱 Bouncing Balls | Three balls (red, green, blue) bounce under simulated gravity with energy loss on each bounce |
 | 🫁 Breathing | All pixels pulse in and out on a slow breathing rhythm using a sin² envelope |
+| 🦋 Breathing Rainbow | Rainbow colors sweep through the strip while a breathing pulse slowly expands and contracts |
 | 🕯️ Candlelight | Warm orange flicker: each pixel drifts toward a random brightness target, with occasional sharp gusts |
+| 🧩 Cellular Automata | Rule 30 cellular automaton; complex patterns emerge each generation from a simple 3-cell neighborhood rule |
 | 💨 Chase | Antialiased comet with a tail proportional to strip length; picks a new random color each lap |
 | 🎄 Christmas | Alternating red and green bands with a slow white twinkle overlay |
 | 🌀 Color Cycle | The whole strip slowly cycles through one solid hue at a time |
-| 🟦 Color Wipe Blue | Fills the strip blue one pixel at a time from one end, then clears it the same way |
-| 🟩 Color Wipe Green | Fills the strip green one pixel at a time from one end, then clears it the same way |
-| 🟥 Color Wipe Red | Fills the strip red one pixel at a time from one end, then clears it the same way |
+| 🖌️ Color Wipe | Fills the strip with the user-selected color one pixel at a time from one end, then clears it the same way |
 | 🌠 Comets | Three comets of different colors chase each other around the strip at different speeds |
 | 🎊 Confetti | Saturated random-hue dots scatter onto a slowly decaying background |
 | 👁️ Cylon | Red Larson-scanner eye bounces back and forth with exponential brightness falloff on either side |
 | 🧬 DNA Helix | Two interlocked sine waves in cyan and orange scroll along the strip like a DNA double helix |
 | 🎲 Domino | A tap at one end triggers a chain reaction that cascades to the other end, each pixel tipping the next |
+| ⚙️ Double Pendulum | Chaotic double-pendulum physics — the tip traces an unpredictable path with a fading color trail |
 | 💧 Drip | Colored drops spawn at one end, accelerate under gravity, and splat at the other end |
-| 🔥 Fire | Heat-diffusion simulation: base glows hot, heat rises through a black→red→yellow→white palette |
 | 🐣 Easter | Soft pastel mint, lavender, peach, sky blue, and rose pink breathe gently across the strip |
+| 🔥 Fire | Heat-diffusion simulation: base glows hot, heat rises through a black→red→yellow→white palette |
 | 🪲 Fireflies | Dim drifting dots that randomly glow bright then fade, like fireflies on a summer night |
 | 💥 Fireworks | Rockets launch from the base, reach an apex, and burst into colorful fragments |
 | 🔭 Galaxy | Soft drifting nebula of blues and purples with occasional bright star flares |
-| 🍿 Popcorn | Pixels pop bright then fade; spawn rate ramps up in waves like corn popping |
+| 📺 Glitch | Digital corruption — block shifts, channel swaps, noise bursts, and color inversions |
 | 🌅 Gradient Cycle | Smooth gradient between two complementary colors that slowly scrolls across the strip |
+| 🪐 Gravity Well | Particles orbit a drifting gravity center — closer ones orbit faster and glow brighter |
 | 🎃 Halloween Eyes | A pair of red eyes appears at a random position, holds, fades out, then reappears elsewhere |
 | 💓 Heartbeat | A red lub-dub double pulse at 72 BPM with a long dark pause between beats |
+| 💫 Hypnotic Spiral | Rotating color bands create a hypnotic optical illusion |
+| 🧊 Icicles | Ice crystals grow from anchor points, drip, and shatter on impact |
 | 🤹 Juggle | Six differently-colored dots bounce at staggered speeds; their fading trails overlap and blend |
 | 🚗 KITT | Twin red eyes start at center, expand outward to the ends, then contract back together |
 | 🌋 Lava Lamp | Slow warm blobs drift through a dim red background, like a lava lamp |
 | 🌩️ Lightning | Random white strikes flare across the strip, then fade into a flickering blue-white afterglow |
+| 📐 Lissajous | Parametric Lissajous figure mapped to the strip — brightness shows the curve density at each position |
+| 💻 Matrix Rain | Green falling pixel trails cascade along the strip like The Matrix |
 | ☄️ Meteor Rain | White meteor streaks across the strip leaving a randomly-decaying trail, then resets |
 | 📡 Morse Code | Flashes "SOS" in International Morse Code on a repeating loop |
+| 🐦 Murmuration | Boids flocking — particles attract, align, and avoid each other in flight |
 | 💡 Neon Sign | Pink neon glow with realistic fluorescent tube flicker, buzz, and occasional dropout |
+| 🏔️ Northern Lights | Slow curtains of aurora light drift across the strip in structured beams |
 | 🫧 Oil Slick | Dark iridescent rainbow sheen slowly shifts across the strip like light on spilled oil |
 | 🌊 Pacifica | Three-layer ocean wave simulation in deep blue-green, inspired by FastLED's Pacifica |
 | ⏳ Pendulum | A glowing dot swings with realistic pendulum physics, slowing at each end |
+| 🎯 Pendulum Wave | Multiple pendulums with slightly different periods create mesmerizing wave patterns |
+| 🔢 Pixel Sort | Bubble sort visualized — hued pixels shuffle into chromatic order, then reset |
 | 🔮 Plasma | Four sine waves at different spatial and temporal frequencies combine into a shifting color interference pattern |
 | 🚨 Police Lights | Alternating red/blue half-strip strobes with a brief white center flash between each side |
 | 🏓 Pong | A bright dot bounces between the two ends, getting faster with each hit |
-| 🧪 Reaction Diffusion | Gray-Scott activator-inhibitor model; organic Turing stripe patterns emerge from chemistry |
+| 🍿 Popcorn | Pixels pop bright then fade; spawn rate ramps up in waves like corn popping |
 | 🏳️‍🌈 Pride | Six-color pride flag mapped across the strip and slowly scrolling |
 | 🌈 Rainbow | Colorwheel hue shifts pixel-to-pixel across the strip, cycling through all colors continuously |
 | 🎆 Random Fade | Sparks of random color ignite at random positions, ramp up to peak brightness, then fade out |
 | 🎨 Random Twinkle | Ten random-colored pixels reposition randomly every 100 ms |
+| 🧪 Reaction Diffusion | Gray-Scott activator-inhibitor model; organic Turing stripe patterns emerge from chemistry |
 | 💦 Ripple | Random tap points send expanding rings of light that fade as they travel outward |
 | 🏃 Running Lights | Red sine-wave brightness ripples continuously down the strip |
-| 🌿 Running Lights Green | Green sine-wave brightness ripples continuously down the strip |
 | 🏖️ Sand | Sandy particles settle under gravity, then scatter with a periodic shake |
-| 🎇 Sparkler | A drifting source continuously throws fast short-lived sparks in both directions |
 | 〰️ Sinelon | A single dot rides a sine wave back and forth leaving a fading trail |
+| 🐍 Snake | Classic snake grows as it eats food items, bouncing between the strip ends |
 | ❄️ Snow Sparkle | Dim white background with a single bright sparkle that jumps to a new position every 200 ms |
-| 🔵 Solid Blue | Solid static blue |
-| 🟢 Solid Green | Solid static green |
-| 🔴 Solid Red | Solid static red |
-| ⬜ Solid White | Solid static warm white |
+| 🎨 Solid Color | Strip fills with the user-selected color from the Color picker |
 | ✨ Sparkle | Pixels independently ramp to a random peak brightness then fade back to dark |
+| 🎇 Sparkler | A drifting source continuously throws fast short-lived sparks in both directions |
+| 🌟 Starfield | Stars at varying depths scroll past — nearer ones brighter and faster |
 | ⚡ Strobe | Ten rapid white flashes in a burst followed by a 1-second pause, then repeat |
-| 🔴 Strobe Red | Ten rapid red flashes in a burst followed by a 1-second pause, then repeat |
 | 🌄 Sunrise | Slow day cycle shifting through night purple, deep red, orange, golden yellow, and back |
 | 🎭 Theatre Chase | Every third pixel is lit and steps along the strip in a marching-lights pattern |
 | 🎪 Theatre Chase Rainbow | Theatre chase with a different colorwheel hue on each lit pixel, advancing with every step |
+| ⛈️ Thunderstorm | Rain drops fall under gravity while periodic lightning flashes illuminate the whole strip |
+| 🚦 Traffic | Colored cars travel in both directions with headlights and taillights; collisions flash orange |
+| ⚖️ Tug of War | Red and blue forces push from opposite ends; the boundary oscillates and occasionally surges |
 | ⭐ Twinkle | Ten white pixels reposition randomly every 100 ms |
 | 🌪️ Twister | Multiple overlapping sine waves at different frequencies create shifting interference patterns |
-| ⚖️ Tug of War | Red and blue forces push from opposite ends; the boundary oscillates and occasionally surges |
+| ⌨️ Typewriter | Pixels illuminate left-to-right like text being typed, pause, then erase right-to-left |
+| 🦠 Virus | Infection seeds spread outward to neighbors, color shifts green→red as it ages, then resets |
 | 📊 VU Meter | Simulated audio level meter with a bouncing bar, green-to-red color gradient, and peak-hold pixel |
 | 🫗 Waterfall | A stream of slowly-shifting color flows steadily from one end to the other |
+| 〽️ Wave Interference | Sine-wave sources drift toward each other; constructive and destructive interference shifts patterns |
 | 🐛 Worm | A glowing segmented worm crawls the strip; speed variation makes the body snake and bunch |
 
 ## Lua effect API
@@ -445,7 +459,7 @@ src/
 └── effects/
     ├── mod.rs           Effect trait, EffectRegistry (with Lua auto-load), LuaBuf helpers
     └── lua_effect.rs    LuaEffect wrapper — Lua VM per effect, probe_metadata
-effects/                 48 Lua effect scripts (auto-discovered at startup)
+effects/                 81 Lua effect scripts (auto-discovered at startup)
 static/
 ├── index.html           control panel (embedded in binary via include_str!)
 └── app.js               frontend JS (embedded in binary via include_str!)
@@ -461,7 +475,6 @@ led-state.json           persisted UI state (created automatically on first run)
 
 ### Effects
 - **Audio reactive** — sample a USB mic/dongle and drive brightness or color from beat detection or amplitude
-- **Custom color picker** — choose the color for solid/wipe/chase effects from the UI without editing code
 - **Per-effect color palette** — let effects draw from a user-chosen set of colors rather than hard-coded values
 - **Segmented effects** — run different effects on different sections of the strip simultaneously
 

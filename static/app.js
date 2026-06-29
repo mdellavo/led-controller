@@ -70,6 +70,16 @@ const EFFECT_ICONS = {
   'Bloom':                 '🌸',
   'Hypnotic Spiral':       '💫',
   'Northern Lights':       '🏔️',
+  'Thunderstorm':          '⛈️',
+  'Wave Interference':     '〽️',
+  'Traffic':               '🚦',
+  'Virus':                 '🦠',
+  'Double Pendulum':       '⚙️',
+  'Glitch':                '📺',
+  'Typewriter':            '⌨️',
+  'Lissajous':             '📐',
+  'Gravity Well':          '🪐',
+  'Breathing Rainbow':     '🦋',
 };
 
 const effectLabel = (name) => EFFECT_ICONS[name] ? `${EFFECT_ICONS[name]} ${name}` : name;
