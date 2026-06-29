@@ -110,11 +110,10 @@ async fn main() -> anyhow::Result<()> {
     let initial_playlist       = s.map(|s| s.playlist.clone());
     let initial_playlist_index = s.map(|s| s.playlist_index).unwrap_or(0);
     let should_start           = s.map(|s| s.is_running).unwrap_or(true);
-    let saved_color            = s.map(|s| s.user_color).unwrap_or([255, 255, 255]);
     let user_color: Arc<[AtomicU8; 3]> = Arc::new([
-        AtomicU8::new(saved_color[0]),
-        AtomicU8::new(saved_color[1]),
-        AtomicU8::new(saved_color[2]),
+        AtomicU8::new(rand::random()),
+        AtomicU8::new(rand::random()),
+        AtomicU8::new(rand::random()),
     ]);
 
     // -----------------------------------------------------------------------

@@ -122,7 +122,6 @@ fn default_fade_ms()     -> u64    { 3000 }
 fn default_gpio_pin()    -> i32    { 18 }
 fn default_num_pixels()  -> usize  { 60 }
 fn default_true()        -> bool   { true }
-fn default_user_color()  -> [u8; 3] { [255, 255, 255] }
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct PersistentState {
@@ -139,7 +138,6 @@ pub struct PersistentState {
     #[serde(default = "default_gpio_pin")]     pub gpio_pin: i32,
     #[serde(default = "default_num_pixels")]   pub num_pixels: usize,
     #[serde(default = "default_true")]         pub is_running: bool,
-    #[serde(default = "default_user_color")]   pub user_color: [u8; 3],
 }
 
 impl PersistentState {
@@ -178,7 +176,6 @@ impl From<&SharedState> for PersistentState {
             gpio_pin: s.gpio_pin,
             num_pixels: s.num_pixels,
             is_running: s.is_running,
-            user_color: s.user_color,
         }
     }
 }
