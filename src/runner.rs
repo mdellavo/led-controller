@@ -1,6 +1,6 @@
 use std::sync::{
     atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering},
-    Arc, Mutex,
+    Arc, Mutex, RwLock,
 };
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
@@ -207,6 +207,7 @@ pub enum Command {
     SetNumPixels(usize),
     SetGpioPin(i32),
     SetUserColor(u8, u8, u8),
+    SetPalette(Vec<[u8; 3]>),
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -231,6 +232,7 @@ pub struct SharedState {
     pub gpio_pin: i32,
     pub color_order: String,
     pub user_color: [u8; 3],
+    pub palette: Vec<[u8; 3]>,
 }
 
 // --------------------------------------------------------------------------
@@ -256,6 +258,8 @@ pub struct RunnerConfig {
     pub state_file: Option<std::path::PathBuf>,
     /// Shared atomic user color — written by SetUserColor, read by every LuaEffect VM.
     pub user_color: Arc<[AtomicU8; 3]>,
+    /// Shared palette — written by SetPalette, snapshotted by every LuaEffect VM each frame.
+    pub palette: Arc<RwLock<Vec<[u8; 3]>>>,
 }
 
 impl Default for RunnerConfig {
@@ -267,6 +271,7 @@ impl Default for RunnerConfig {
             gpio_pin: 18, hw_brightness: 25, color_order: ColorOrder::default(),
             initial_playlist: None, initial_playlist_index: 0, state_file: None,
             user_color: Arc::new([AtomicU8::new(255), AtomicU8::new(255), AtomicU8::new(255)]),
+            palette: Arc::new(RwLock::new(Vec::new())),
         }
     }
 }
@@ -315,6 +320,9 @@ impl Runner {
             config.user_color[1].load(Ordering::Relaxed),
             config.user_color[2].load(Ordering::Relaxed),
         ];
+        let initial_palette = config.palette.read()
+            .map(|g| g.clone())
+            .unwrap_or_default();
         let shared_state = Arc::new(Mutex::new(SharedState {
             is_running: false,
             current_effect: None,
@@ -336,6 +344,7 @@ impl Runner {
             gpio_pin: config.gpio_pin,
             color_order: color_order_str,
             user_color: initial_user_color,
+            palette: initial_palette,
         }));
 
         let state_clone  = Arc::clone(&shared_state);
@@ -630,6 +639,11 @@ fn run_loop(
                     config.user_color[1].store(g, Ordering::Relaxed);
                     config.user_color[2].store(b, Ordering::Relaxed);
                     if let Ok(mut s) = shared.lock() { s.user_color = [r, g, b]; }
+                }
+                Command::SetPalette(colors) => {
+                    let colors: Vec<[u8; 3]> = colors.into_iter().take(8).collect();
+                    if let Ok(mut pal) = config.palette.write() { *pal = colors.clone(); }
+                    if let Ok(mut s) = shared.lock() { s.palette = colors; }
                 }
             }
         }

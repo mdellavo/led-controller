@@ -1,4 +1,4 @@
-use std::sync::{Arc, atomic::{AtomicU8, Ordering}};
+use std::sync::{Arc, RwLock, atomic::{AtomicU8, Ordering}};
 use std::time::Duration;
 
 use mlua::prelude::*;
@@ -93,10 +93,17 @@ pub struct LuaEffect {
     name: &'static str,
     lua: Lua,
     user_color: Arc<[AtomicU8; 3]>,
+    palette: Arc<RwLock<Vec<[u8; 3]>>>,
 }
 
 impl LuaEffect {
-    pub fn new(name: &'static str, source: String, num_pixels: usize, user_color: Arc<[AtomicU8; 3]>) -> Self {
+    pub fn new(
+        name: &'static str,
+        source: String,
+        num_pixels: usize,
+        user_color: Arc<[AtomicU8; 3]>,
+        palette: Arc<RwLock<Vec<[u8; 3]>>>,
+    ) -> Self {
         let lua = Lua::new();
 
         // Load and execute the script so globals / closures are defined.
@@ -122,7 +129,7 @@ impl LuaEffect {
             }
         }
 
-        Self { name, lua, user_color }
+        Self { name, lua, user_color, palette }
     }
 
     /// Run the script in a throw-away VM to read its `name` and `description` globals.
@@ -157,6 +164,23 @@ impl Effect for LuaEffect {
         let _ = self.lua.globals().set("COLOR_R", r as u32);
         let _ = self.lua.globals().set("COLOR_G", g as u32);
         let _ = self.lua.globals().set("COLOR_B", b as u32);
+
+        // Inject palette globals: PALETTE (1-indexed table of {r,g,b}) and PALETTE_SIZE.
+        let palette_snap: Vec<[u8; 3]> = self.palette.read()
+            .map(|g| g.clone())
+            .unwrap_or_default();
+        if let Ok(pal_table) = self.lua.create_table() {
+            for (i, &[pr, pg, pb]) in palette_snap.iter().enumerate() {
+                if let Ok(entry) = self.lua.create_table() {
+                    let _ = entry.set(1, pr as u32);
+                    let _ = entry.set(2, pg as u32);
+                    let _ = entry.set(3, pb as u32);
+                    let _ = pal_table.set(i + 1, entry);
+                }
+            }
+            let _ = self.lua.globals().set("PALETTE", pal_table);
+        }
+        let _ = self.lua.globals().set("PALETTE_SIZE", palette_snap.len() as u32);
 
         // Invoke the Lua update(buffer, dt) function.
         let keep = (|| -> LuaResult<bool> {

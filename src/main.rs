@@ -3,7 +3,7 @@ mod effects;
 mod runner;
 mod api;
 
-use std::sync::{Arc, atomic::AtomicU8};
+use std::sync::{Arc, RwLock, atomic::AtomicU8};
 
 use axum::{routing::{get, post}, Router};
 use clap::Parser;
@@ -74,6 +74,19 @@ struct Args {
     effects_dir: std::path::PathBuf,
 }
 
+fn colorwheel(pos: u8) -> [u8; 3] {
+    let p = (255u16.wrapping_sub(pos as u16) % 256) as u8;
+    if p < 85 {
+        [255 - p * 3, 0, p * 3]
+    } else if p < 170 {
+        let p = p - 85;
+        [0, p * 3, 255 - p * 3]
+    } else {
+        let p = p - 170;
+        [p * 3, 255 - p * 3, 0]
+    }
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
@@ -116,6 +129,13 @@ async fn main() -> anyhow::Result<()> {
         AtomicU8::new(rand::random()),
     ]);
 
+    // 5 evenly-spaced hues starting from a random offset on the color wheel.
+    let palette_offset = rand::random::<u8>();
+    let initial_palette: Vec<[u8; 3]> = (0u8..5)
+        .map(|i| colorwheel(palette_offset.wrapping_add(i.wrapping_mul(51))))
+        .collect();
+    let palette: Arc<RwLock<Vec<[u8; 3]>>> = Arc::new(RwLock::new(initial_palette));
+
     // -----------------------------------------------------------------------
     // Pixel factory — called at startup and when GPIO pin / pixel count changes
     // -----------------------------------------------------------------------
@@ -146,9 +166,14 @@ async fn main() -> anyhow::Result<()> {
 
     let effects_dir = args.effects_dir.clone();
     let user_color_for_factory = Arc::clone(&user_color);
+    let palette_for_factory    = Arc::clone(&palette);
     let registry_factory: RegistryFactory = Arc::new(move |n: usize| {
         let mut r = default_registry(n);
-        effects::load_lua_effects(&effects_dir, n, &mut r, Arc::clone(&user_color_for_factory));
+        effects::load_lua_effects(
+            &effects_dir, n, &mut r,
+            Arc::clone(&user_color_for_factory),
+            Arc::clone(&palette_for_factory),
+        );
         r
     });
 
@@ -158,7 +183,11 @@ async fn main() -> anyhow::Result<()> {
 
     let pixels = pixel_factory(gpio_pin, num_pixels, args.brightness);
     let mut registry = default_registry(num_pixels);
-    effects::load_lua_effects(&args.effects_dir, num_pixels, &mut registry, Arc::clone(&user_color));
+    effects::load_lua_effects(
+        &args.effects_dir, num_pixels, &mut registry,
+        Arc::clone(&user_color),
+        Arc::clone(&palette),
+    );
 
     let config = RunnerConfig {
         fade_in_ms, fade_out_ms, crossfade_ms,
@@ -170,6 +199,7 @@ async fn main() -> anyhow::Result<()> {
         initial_playlist_index,
         state_file: Some(args.state_file),
         user_color,
+        palette,
     };
 
     let runner = Runner::new(pixels, registry, config, pixel_factory, registry_factory);

@@ -375,6 +375,32 @@ end
 | `buf:plot(pos, r, g, b, alpha)` | Sub-pixel antialiased write at fractional position (wraps via `rem_euclid`) |
 | `buf:fade(per_second, dt)` | Multiply all pixels by `per_second ^ dt` — frame-rate-independent trail decay |
 
+### Color and palette globals
+
+Two sets of globals are injected before every `update()` call:
+
+| Global | Type | Description |
+|---|---|---|
+| `COLOR_R`, `COLOR_G`, `COLOR_B` | integer 0–255 | Single user-chosen color from the Color card |
+| `PALETTE` | table | 1-indexed table; each entry is `{r, g, b}` (integers 0–255) |
+| `PALETTE_SIZE` | integer | Number of colors in the palette (0 if empty) |
+
+```lua
+-- Single color
+local r = COLOR_R or 255
+local g = COLOR_G or 0
+local b = COLOR_B or 0
+
+-- Random palette color
+if PALETTE_SIZE and PALETTE_SIZE > 0 then
+    local c = PALETTE[math.random(1, PALETTE_SIZE)]
+    local r, g, b = c[1], c[2], c[3]
+end
+
+-- Cycle through palette by index
+local c = PALETTE[(math.floor(t) % PALETTE_SIZE) + 1]
+```
+
 `buf:plot` splits brightness between the two adjacent integer pixels by the fractional part, giving smooth motion without pixel-level jitter. `buf:fade` keeps trail lengths consistent regardless of frame rate or speed setting — use `0.85^60` to mean "decay to 85% at 60 fps per frame".
 
 ### Adding an effect
@@ -446,6 +472,7 @@ Reconnect automatically on close; the server resends the full current state on e
 | `set_color_order` | `effect` | Set physical channel order string (e.g. `"grb"`) |
 | `set_num_pixels` | `value_ms` | Reinitialize with a new pixel count |
 | `set_gpio_pin` | `value_ms` | Reinitialize hardware on a different GPIO pin |
+| `set_palette` | `palette` | Set the palette — array of `{"r":…,"g":…,"b":…}` objects (max 8) |
 
 ## Project structure
 
@@ -475,7 +502,6 @@ led-state.json           persisted UI state (created automatically on first run)
 
 ### Effects
 - **Audio reactive** — sample a USB mic/dongle and drive brightness or color from beat detection or amplitude
-- **Per-effect color palette** — let effects draw from a user-chosen set of colors rather than hard-coded values
 - **Segmented effects** — run different effects on different sections of the strip simultaneously
 
 ## Transition behavior

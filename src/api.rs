@@ -100,6 +100,13 @@ pub async fn get_state(State(app): State<AppState>) -> impl IntoResponse {
 // --------------------------------------------------------------------------
 
 #[derive(Deserialize)]
+pub struct PaletteColor {
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+}
+
+#[derive(Deserialize)]
 pub struct CommandRequest {
     pub action: String,
     pub effect: Option<String>,
@@ -110,6 +117,7 @@ pub struct CommandRequest {
     pub r: Option<u8>,
     pub g: Option<u8>,
     pub b: Option<u8>,
+    pub palette: Option<Vec<PaletteColor>>,
 }
 
 #[derive(Serialize)]
@@ -152,6 +160,9 @@ pub async fn post_command(
             (Some(r), Some(g), Some(b)) => Some(Command::SetUserColor(r, g, b)),
             _ => None,
         },
+        "set_palette" => req.palette.map(|colors| {
+            Command::SetPalette(colors.into_iter().map(|c| [c.r, c.g, c.b]).collect())
+        }),
         _ => None,
     };
 

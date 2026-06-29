@@ -248,6 +248,64 @@ colorPicker.addEventListener('input', () => {
   fadeDebouncers['color'] = setTimeout(() => api('set_color', { r, g, b }), 80);
 });
 
+// Palette
+const MAX_PALETTE = 8;
+let paletteColors = [];
+
+const hexFromRgb = (r, g, b) =>
+  '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
+
+const sendPalette = () => {
+  const palette = paletteColors.map(hex => ({
+    r: parseInt(hex.slice(1, 3), 16),
+    g: parseInt(hex.slice(3, 5), 16),
+    b: parseInt(hex.slice(5, 7), 16),
+  }));
+  clearTimeout(fadeDebouncers['palette']);
+  fadeDebouncers['palette'] = setTimeout(() => api('set_palette', { palette }), 80);
+};
+
+const renderPalette = () => {
+  const container = document.getElementById('palette-swatches');
+  container.innerHTML = '';
+  paletteColors.forEach((hex, i) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'palette-swatch';
+
+    const inp = document.createElement('input');
+    inp.type = 'color';
+    inp.value = hex;
+    inp.title = `Color ${i + 1}`;
+    inp.addEventListener('input', () => {
+      paletteColors[i] = inp.value;
+      sendPalette();
+    });
+
+    const rm = document.createElement('button');
+    rm.className = 'swatch-remove';
+    rm.textContent = '×';
+    rm.title = 'Remove';
+    rm.addEventListener('click', () => {
+      paletteColors.splice(i, 1);
+      renderPalette();
+      sendPalette();
+    });
+
+    wrap.appendChild(inp);
+    wrap.appendChild(rm);
+    container.appendChild(wrap);
+  });
+  document.getElementById('palette-add').disabled = paletteColors.length >= MAX_PALETTE;
+};
+
+document.getElementById('palette-add').addEventListener('click', () => {
+  if (paletteColors.length < MAX_PALETTE) {
+    paletteColors.push('#ffffff');
+    renderPalette();
+    sendPalette();
+  }
+});
+
 // --------------------------------------------------------------------------
 // Hardware settings
 // --------------------------------------------------------------------------
@@ -417,6 +475,15 @@ const renderState = (state) => {
     gammaVal.textContent = parseFloat(state.gamma).toFixed(1);
     document.getElementById('num-pixels').value = state.num_pixels;
     document.getElementById('gpio-pin').value = state.gpio_pin;
+  }
+
+  // Palette — sync whenever server state differs (avoids fighting active edits)
+  if (state.palette) {
+    const incoming = state.palette.map(([r, g, b]) => hexFromRgb(r, g, b));
+    if (JSON.stringify(incoming) !== JSON.stringify(paletteColors)) {
+      paletteColors = incoming;
+      renderPalette();
+    }
   }
 };
 
