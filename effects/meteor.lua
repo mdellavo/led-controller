@@ -8,7 +8,6 @@ local random_decay = true
 local decay_per_second = ((255 - 64) / 255) ^ (1000 / 30)
 local speed            = 1000 / 30  -- pixels per second
 
-local mr_r, mr_g, mr_b = 255, 255, 255
 local pos = 0.0
 
 function init(n)
@@ -37,11 +36,14 @@ function update(buf, dt)
     -- Advance meteor
     pos = pos + speed * dt
 
+    local mr = COLOR_R or 255
+    local mg = COLOR_G or 255
+    local mb = COLOR_B or 255
     -- Draw meteor head (non-wrapping)
     for i = 0, meteor_size - 1 do
         local p = pos - i
         if p >= 0 and p < n then
-            buf:plot(p, mr_r, mr_g, mr_b, 1.0)
+            buf:plot(p, mr, mg, mb, 1.0)
         end
     end
 

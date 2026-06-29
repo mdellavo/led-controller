@@ -3,7 +3,7 @@ mod effects;
 mod runner;
 mod api;
 
-use std::sync::Arc;
+use std::sync::{Arc, atomic::AtomicU8};
 
 use axum::{routing::{get, post}, Router};
 use clap::Parser;
@@ -110,6 +110,12 @@ async fn main() -> anyhow::Result<()> {
     let initial_playlist       = s.map(|s| s.playlist.clone());
     let initial_playlist_index = s.map(|s| s.playlist_index).unwrap_or(0);
     let should_start           = s.map(|s| s.is_running).unwrap_or(true);
+    let saved_color            = s.map(|s| s.user_color).unwrap_or([255, 255, 255]);
+    let user_color: Arc<[AtomicU8; 3]> = Arc::new([
+        AtomicU8::new(saved_color[0]),
+        AtomicU8::new(saved_color[1]),
+        AtomicU8::new(saved_color[2]),
+    ]);
 
     // -----------------------------------------------------------------------
     // Pixel factory — called at startup and when GPIO pin / pixel count changes
@@ -140,9 +146,10 @@ async fn main() -> anyhow::Result<()> {
     // -----------------------------------------------------------------------
 
     let effects_dir = args.effects_dir.clone();
+    let user_color_for_factory = Arc::clone(&user_color);
     let registry_factory: RegistryFactory = Arc::new(move |n: usize| {
         let mut r = default_registry(n);
-        effects::load_lua_effects(&effects_dir, n, &mut r);
+        effects::load_lua_effects(&effects_dir, n, &mut r, Arc::clone(&user_color_for_factory));
         r
     });
 
@@ -152,7 +159,7 @@ async fn main() -> anyhow::Result<()> {
 
     let pixels = pixel_factory(gpio_pin, num_pixels, args.brightness);
     let mut registry = default_registry(num_pixels);
-    effects::load_lua_effects(&args.effects_dir, num_pixels, &mut registry);
+    effects::load_lua_effects(&args.effects_dir, num_pixels, &mut registry, Arc::clone(&user_color));
 
     let config = RunnerConfig {
         fade_in_ms, fade_out_ms, crossfade_ms,
@@ -163,6 +170,7 @@ async fn main() -> anyhow::Result<()> {
         initial_playlist,
         initial_playlist_index,
         state_file: Some(args.state_file),
+        user_color,
     };
 
     let runner = Runner::new(pixels, registry, config, pixel_factory, registry_factory);

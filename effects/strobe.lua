@@ -1,7 +1,6 @@
 name = "Strobe"
 description = "Ten rapid white flashes in a burst followed by a 1-second pause, then repeat"
 
-local flash_r, flash_g, flash_b = 255, 255, 255
 local flashes       = 10
 local flash_delay   = 50.0   -- ms per on/off half-cycle
 local end_pause     = 1000.0 -- ms between bursts
@@ -12,10 +11,13 @@ local timer       = 0.0
 
 function update(buf, dt)
     local n = buf:len()
+    local r = COLOR_R or 255
+    local g = COLOR_G or 255
+    local b = COLOR_B or 255
     timer = timer + dt * 1000.0
 
     if state == "on" then
-        for i = 0, n - 1 do buf:set(i, flash_r, flash_g, flash_b) end
+        for i = 0, n - 1 do buf:set(i, r, g, b) end
         if timer >= flash_delay then
             timer = timer - flash_delay
             state = "off"

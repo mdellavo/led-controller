@@ -4,7 +4,6 @@ const EFFECT_ICONS = {
   'Chase':                 '💨',
   'Sparkle':               '✨',
   'Strobe':                '⚡',
-  'Strobe Red':            '🔴',
   'Cylon':                 '👁️',
   'KITT':                  '🚗',
   'Halloween Eyes':        '🎃',
@@ -12,19 +11,13 @@ const EFFECT_ICONS = {
   'Random Twinkle':        '🎨',
   'Snow Sparkle':          '❄️',
   'Running Lights':        '🏃',
-  'Running Lights Green':  '🌿',
-  'Color Wipe Red':        '🟥',
-  'Color Wipe Green':      '🟩',
-  'Color Wipe Blue':       '🟦',
   'Theatre Chase':         '🎭',
   'Theatre Chase Rainbow': '🎪',
   'Fire':                  '🔥',
   'Bouncing Balls':        '🎱',
   'Meteor Rain':           '☄️',
-  'Solid Red':             '🔴',
-  'Solid Green':           '🟢',
-  'Solid Blue':            '🔵',
-  'Solid White':           '⬜',
+  'Solid Color':           '🎨',
+  'Color Wipe':            '🖌️',
   'Breathing':             '🫁',
   'Candlelight':           '🕯️',
   'Color Cycle':           '🌀',
@@ -234,6 +227,17 @@ brightnessSlider.addEventListener('input', () => {
   fadeDebouncers['brightness'] = setTimeout(() => api('set_brightness', { value: v }), 150);
 });
 
+// Color picker
+const colorPicker = document.getElementById('user-color');
+colorPicker.addEventListener('input', () => {
+  const hex = colorPicker.value;
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  clearTimeout(fadeDebouncers['color']);
+  fadeDebouncers['color'] = setTimeout(() => api('set_color', { r, g, b }), 80);
+});
+
 // --------------------------------------------------------------------------
 // Hardware settings
 // --------------------------------------------------------------------------
@@ -392,6 +396,11 @@ const renderState = (state) => {
     speedVal.textContent = parseFloat(state.speed).toFixed(1) + '×';
     brightnessSlider.value = state.brightness;
     brightnessVal.textContent = Math.round(parseFloat(state.brightness) * 100) + '%';
+    // color picker
+    if (state.user_color) {
+      const [cr, cg, cb] = state.user_color;
+      colorPicker.value = '#' + [cr, cg, cb].map(v => v.toString(16).padStart(2, '0')).join('');
+    }
     // hardware settings
     colorOrderSelect.value = (state.color_order || 'rgb').toLowerCase();
     gammaSlider.value = state.gamma;

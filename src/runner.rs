@@ -1,5 +1,5 @@
 use std::sync::{
-    atomic::{AtomicBool, AtomicU32, Ordering},
+    atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering},
     Arc, Mutex,
 };
 use std::thread::{self, JoinHandle};
@@ -122,6 +122,7 @@ fn default_fade_ms()     -> u64    { 3000 }
 fn default_gpio_pin()    -> i32    { 18 }
 fn default_num_pixels()  -> usize  { 60 }
 fn default_true()        -> bool   { true }
+fn default_user_color()  -> [u8; 3] { [255, 255, 255] }
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct PersistentState {
@@ -138,6 +139,7 @@ pub struct PersistentState {
     #[serde(default = "default_gpio_pin")]     pub gpio_pin: i32,
     #[serde(default = "default_num_pixels")]   pub num_pixels: usize,
     #[serde(default = "default_true")]         pub is_running: bool,
+    #[serde(default = "default_user_color")]   pub user_color: [u8; 3],
 }
 
 impl PersistentState {
@@ -176,6 +178,7 @@ impl From<&SharedState> for PersistentState {
             gpio_pin: s.gpio_pin,
             num_pixels: s.num_pixels,
             is_running: s.is_running,
+            user_color: s.user_color,
         }
     }
 }
@@ -206,6 +209,7 @@ pub enum Command {
     SetColorOrder(String),
     SetNumPixels(usize),
     SetGpioPin(i32),
+    SetUserColor(u8, u8, u8),
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -229,6 +233,7 @@ pub struct SharedState {
     pub num_pixels: usize,
     pub gpio_pin: i32,
     pub color_order: String,
+    pub user_color: [u8; 3],
 }
 
 // --------------------------------------------------------------------------
@@ -252,6 +257,8 @@ pub struct RunnerConfig {
     pub initial_playlist_index: usize,
     /// Where to persist state across restarts.
     pub state_file: Option<std::path::PathBuf>,
+    /// Shared atomic user color — written by SetUserColor, read by every LuaEffect VM.
+    pub user_color: Arc<[AtomicU8; 3]>,
 }
 
 impl Default for RunnerConfig {
@@ -262,6 +269,7 @@ impl Default for RunnerConfig {
             effect_duration_ms: 0, speed: 1.0, brightness: 1.0, gamma: 2.2,
             gpio_pin: 18, hw_brightness: 25, color_order: ColorOrder::default(),
             initial_playlist: None, initial_playlist_index: 0, state_file: None,
+            user_color: Arc::new([AtomicU8::new(255), AtomicU8::new(255), AtomicU8::new(255)]),
         }
     }
 }
@@ -305,6 +313,11 @@ impl Runner {
         let initial_playlist_index = config.initial_playlist_index
             .min(initial_playlist.len().saturating_sub(1));
 
+        let initial_user_color = [
+            config.user_color[0].load(Ordering::Relaxed),
+            config.user_color[1].load(Ordering::Relaxed),
+            config.user_color[2].load(Ordering::Relaxed),
+        ];
         let shared_state = Arc::new(Mutex::new(SharedState {
             is_running: false,
             current_effect: None,
@@ -325,6 +338,7 @@ impl Runner {
             num_pixels,
             gpio_pin: config.gpio_pin,
             color_order: color_order_str,
+            user_color: initial_user_color,
         }));
 
         let state_clone  = Arc::clone(&shared_state);
@@ -613,6 +627,12 @@ fn run_loop(
                         let h = EffectHandle::spawn(effect, num_pixels, Arc::clone(&speed));
                         state = start_effect(std::mem::replace(&mut state, RunnerState::Idle), h, fade_in_dur, crossfade_dur);
                     }
+                }
+                Command::SetUserColor(r, g, b) => {
+                    config.user_color[0].store(r, Ordering::Relaxed);
+                    config.user_color[1].store(g, Ordering::Relaxed);
+                    config.user_color[2].store(b, Ordering::Relaxed);
+                    if let Ok(mut s) = shared.lock() { s.user_color = [r, g, b]; }
                 }
             }
         }

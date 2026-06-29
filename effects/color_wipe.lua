@@ -1,7 +1,6 @@
-name = "Color Wipe Blue"
-description = "Fills the strip blue one pixel at a time from one end, then clears it the same way"
+name = "Color Wipe"
+description = "Fills the strip with the user-selected color one pixel at a time, then clears it the same way."
 
-local cw_r, cw_g, cw_b = 0, 0, 255
 local speed_ms = 20.0
 local state    = "wiping"
 local pos      = 0
@@ -15,30 +14,26 @@ end
 
 function update(buf, dt)
     local n = buf:len()
+    local r = COLOR_R or 255
+    local g = COLOR_G or 255
+    local b = COLOR_B or 255
     timer = timer + dt * 1000.0
 
     while timer >= speed_ms do
         timer = timer - speed_ms
         if state == "wiping" then
             if pos < n then
-                buf:set(pos, cw_r, cw_g, cw_b)
+                buf:set(pos, r, g, b)
                 pos = pos + 1
             end
-            if pos >= n then
-                pos   = 0
-                state = "clearing"
-            end
+            if pos >= n then pos = 0; state = "clearing" end
         else
             if pos < n then
                 buf:set(pos, 0, 0, 0)
                 pos = pos + 1
             end
-            if pos >= n then
-                pos   = 0
-                state = "wiping"
-            end
+            if pos >= n then pos = 0; state = "wiping" end
         end
     end
-
     return true
 end

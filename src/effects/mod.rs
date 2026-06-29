@@ -1,5 +1,6 @@
 use std::time::Duration;
 use std::collections::HashMap;
+use std::sync::{Arc, atomic::AtomicU8};
 use crate::pixels::Color;
 
 pub type Buffer = Vec<Color>;
@@ -100,7 +101,6 @@ pub mod lua_effect;
 
 pub mod rainbow;
 pub mod fade;
-pub mod solid;
 pub mod chase;
 pub mod sparkle;
 pub mod strobe;
@@ -109,7 +109,6 @@ pub mod halloween_eyes;
 pub mod twinkle;
 pub mod snow_sparkle;
 pub mod running_lights;
-pub mod color_wipe;
 pub mod theatre_chase;
 pub mod fire;
 pub mod bouncing_balls;
@@ -118,7 +117,7 @@ pub mod meteor;
 /// Scan `dir` for `*.lua` files and register each as a `LuaEffect`.
 /// Silently skips the directory if it doesn't exist. Scripts that fail to
 /// load or lack a `name` global fall back to the filename stem as the name.
-pub fn load_lua_effects(dir: &std::path::Path, num_pixels: usize, registry: &mut EffectRegistry) {
+pub fn load_lua_effects(dir: &std::path::Path, num_pixels: usize, registry: &mut EffectRegistry, user_color: Arc<[AtomicU8; 3]>) {
     let entries = match std::fs::read_dir(dir) {
         Ok(e) => e,
         Err(_) => return,
@@ -150,7 +149,8 @@ pub fn load_lua_effects(dir: &std::path::Path, num_pixels: usize, registry: &mut
         }
         registry.register(static_name, {
             let src = source.clone();
-            move || Box::new(lua_effect::LuaEffect::new(static_name, src.clone(), num_pixels))
+            let color = Arc::clone(&user_color);
+            move || Box::new(lua_effect::LuaEffect::new(static_name, src.clone(), num_pixels, Arc::clone(&color)))
         });
     }
 }
@@ -166,7 +166,6 @@ pub fn default_registry(num_pixels: usize) -> EffectRegistry {
 
     // Tweaking4all effects
     r.register("Strobe", || Box::new(strobe::StrobeEffect::new([255, 255, 255], 10, 50.0, 1000.0)));
-    r.register("Strobe Red", || Box::new(strobe::StrobeEffect::new([255, 0, 0], 10, 50.0, 1000.0)));
     r.register("Cylon", || Box::new(cylon::CylonEffect::new([255, 0, 0], 4, 30.0)));
     r.register("KITT", || Box::new(cylon::KITTEffect::new([255, 0, 0], 4, 30.0)));
     r.register("Halloween Eyes", move || Box::new(halloween_eyes::HalloweenEyesEffect::new(
@@ -178,10 +177,6 @@ pub fn default_registry(num_pixels: usize) -> EffectRegistry {
         [20, 20, 20], [255, 255, 255], 20.0, 200.0,
     )));
     r.register("Running Lights", || Box::new(running_lights::RunningLightsEffect::new([255, 0, 0], 1.0)));
-    r.register("Running Lights Green", || Box::new(running_lights::RunningLightsEffect::new([0, 255, 0], 1.0)));
-    r.register("Color Wipe Red", || Box::new(color_wipe::ColorWipeEffect::new([255, 0, 0], 20.0)));
-    r.register("Color Wipe Green", || Box::new(color_wipe::ColorWipeEffect::new([0, 255, 0], 20.0)));
-    r.register("Color Wipe Blue", || Box::new(color_wipe::ColorWipeEffect::new([0, 0, 255], 20.0)));
     r.register("Theatre Chase", || Box::new(theatre_chase::TheatreChaseEffect::new([255, 255, 255], 100.0)));
     r.register("Theatre Chase Rainbow", || Box::new(theatre_chase::TheatreChaseRainbowEffect::new(100.0)));
     r.register("Fire", move || Box::new(fire::FireEffect::new(num_pixels, 55, 120, 15.0)));
@@ -189,12 +184,6 @@ pub fn default_registry(num_pixels: usize) -> EffectRegistry {
     r.register("Meteor Rain", || Box::new(meteor::MeteorRainEffect::new(
         [255, 255, 255], 10, 64, true, 30.0,
     )));
-
-    // Solid colors
-    r.register("Solid Red", || Box::new(solid::SolidEffect::new([200, 0, 0], "Solid Red")));
-    r.register("Solid Green", || Box::new(solid::SolidEffect::new([0, 200, 0], "Solid Green")));
-    r.register("Solid Blue", || Box::new(solid::SolidEffect::new([0, 0, 200], "Solid Blue")));
-    r.register("Solid White", || Box::new(solid::SolidEffect::new([200, 200, 200], "Solid White")));
 
     r
 }

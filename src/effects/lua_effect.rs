@@ -1,3 +1,4 @@
+use std::sync::{Arc, atomic::{AtomicU8, Ordering}};
 use std::time::Duration;
 
 use mlua::prelude::*;
@@ -91,10 +92,11 @@ impl LuaUserData for LuaBuf {
 pub struct LuaEffect {
     name: &'static str,
     lua: Lua,
+    user_color: Arc<[AtomicU8; 3]>,
 }
 
 impl LuaEffect {
-    pub fn new(name: &'static str, source: String, num_pixels: usize) -> Self {
+    pub fn new(name: &'static str, source: String, num_pixels: usize, user_color: Arc<[AtomicU8; 3]>) -> Self {
         let lua = Lua::new();
 
         // Load and execute the script so globals / closures are defined.
@@ -120,7 +122,7 @@ impl LuaEffect {
             }
         }
 
-        Self { name, lua }
+        Self { name, lua, user_color }
     }
 
     /// Run the script in a throw-away VM to read its `name` and `description` globals.
@@ -147,6 +149,14 @@ impl Effect for LuaEffect {
 
     fn update(&mut self, buffer: &mut Buffer, delta: Duration) -> bool {
         let dt = delta.as_secs_f32();
+
+        // Inject user color globals so Lua effects can read COLOR_R/G/B.
+        let r = self.user_color[0].load(Ordering::Relaxed);
+        let g = self.user_color[1].load(Ordering::Relaxed);
+        let b = self.user_color[2].load(Ordering::Relaxed);
+        let _ = self.lua.globals().set("COLOR_R", r as u32);
+        let _ = self.lua.globals().set("COLOR_G", g as u32);
+        let _ = self.lua.globals().set("COLOR_B", b as u32);
 
         // Invoke the Lua update(buffer, dt) function.
         let keep = (|| -> LuaResult<bool> {
