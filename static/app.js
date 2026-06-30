@@ -80,6 +80,9 @@ const EFFECT_ICONS = {
   'Lissajous':             '📐',
   'Gravity Well':          '🪐',
   'Breathing Rainbow':     '🦋',
+  'Audio Pulse':           '🎵',
+  'Audio Beat Flash':      '🥁',
+  'Audio Spectrum':        '🎸',
 };
 
 const effectLabel = (name) => EFFECT_ICONS[name] ? `${EFFECT_ICONS[name]} ${name}` : name;
@@ -485,10 +488,70 @@ const renderState = (state) => {
       renderPalette();
     }
   }
+
+  // Audio devices — repopulate dropdown when list changes
+  const devList = state.audio_devices || [];
+  const serverActive = state.audio_device || null;
+  const prevDevJson = audioDeviceSel._lastDevJson;
+  const newDevJson  = JSON.stringify(devList) + '|' + serverActive;
+  if (newDevJson !== prevDevJson) {
+    audioDeviceSel._lastDevJson = newDevJson;
+    renderAudioDevices(devList, serverActive);
+    currentAudioDevice = serverActive;
+  }
+
+  // Audio levels — update VU meter every state push
+  renderAudioLevels(state.audio_amplitude, state.audio_beat);
 };
 
 const syncSlider = (id, valId, ms) => {
   document.getElementById(id).value = ms;
   document.getElementById(valId).textContent = (ms / 1000).toFixed(1) + 's';
+};
+
+// --------------------------------------------------------------------------
+// Audio device management
+// --------------------------------------------------------------------------
+
+let currentAudioDevice = null; // tracks what the server has active
+
+const audioDeviceSel = document.getElementById('audio-device');
+const vuBar          = document.getElementById('audio-vu-bar');
+const vuLabel        = document.getElementById('audio-vu-label');
+const beatDot        = document.getElementById('audio-beat-dot');
+
+audioDeviceSel.addEventListener('change', () => {
+  const name = audioDeviceSel.value || null;
+  api('set_audio_device', { effect: name });
+  currentAudioDevice = name;
+});
+
+document.getElementById('btn-refresh-audio').addEventListener('click', () => {
+  api('refresh_audio_devices');
+});
+
+const renderAudioDevices = (devices, active) => {
+  // Preserve selection if unchanged
+  const prev = audioDeviceSel.value;
+  audioDeviceSel.innerHTML = '<option value="">— Off —</option>';
+  (devices || []).forEach((name) => {
+    const opt = document.createElement('option');
+    opt.value = name;
+    opt.textContent = name;
+    audioDeviceSel.appendChild(opt);
+  });
+  // Restore: prefer active from server, else previous selection
+  audioDeviceSel.value = active || prev || '';
+};
+
+const renderAudioLevels = (amp, beat) => {
+  vuBar.style.width = `${Math.round((amp || 0) * 100)}%`;
+  const b = beat || 0;
+  beatDot.classList.toggle('active', b > 0.5);
+  if (currentAudioDevice) {
+    vuLabel.textContent = `Amp: ${Math.round((amp || 0) * 100)}%  Beat: ${b > 0.5 ? '●' : '○'}`;
+  } else {
+    vuLabel.textContent = 'Select a device to enable audio reactive effects';
+  }
 };
 

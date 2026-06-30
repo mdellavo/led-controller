@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use mlua::prelude::*;
 
+use crate::audio::AudioAnalysis;
 use crate::effects::{Buffer, Effect};
 
 // --------------------------------------------------------------------------
@@ -94,6 +95,7 @@ pub struct LuaEffect {
     lua: Lua,
     user_color: Arc<[AtomicU8; 3]>,
     palette: Arc<RwLock<Vec<[u8; 3]>>>,
+    audio: Arc<AudioAnalysis>,
 }
 
 impl LuaEffect {
@@ -103,6 +105,7 @@ impl LuaEffect {
         num_pixels: usize,
         user_color: Arc<[AtomicU8; 3]>,
         palette: Arc<RwLock<Vec<[u8; 3]>>>,
+        audio: Arc<AudioAnalysis>,
     ) -> Self {
         let lua = Lua::new();
 
@@ -129,7 +132,7 @@ impl LuaEffect {
             }
         }
 
-        Self { name, lua, user_color, palette }
+        Self { name, lua, user_color, palette, audio }
     }
 
     /// Run the script in a throw-away VM to read its `name` and `description` globals.
@@ -181,6 +184,22 @@ impl Effect for LuaEffect {
             let _ = self.lua.globals().set("PALETTE", pal_table);
         }
         let _ = self.lua.globals().set("PALETTE_SIZE", palette_snap.len() as u32);
+
+        // Inject audio globals: AUDIO_AMP, AUDIO_BEAT, AUDIO_BASS, AUDIO_MID,
+        // AUDIO_HIGH, AUDIO_SPECTRUM[16]. All values are 0.0 when no device is active.
+        let _ = self.lua.globals().set("AUDIO_AMP",  f32::from_bits(self.audio.amplitude.load(Ordering::Relaxed)));
+        let _ = self.lua.globals().set("AUDIO_BEAT", f32::from_bits(self.audio.beat.load(Ordering::Relaxed)));
+        let _ = self.lua.globals().set("AUDIO_BASS", f32::from_bits(self.audio.bass.load(Ordering::Relaxed)));
+        let _ = self.lua.globals().set("AUDIO_MID",  f32::from_bits(self.audio.mid.load(Ordering::Relaxed)));
+        let _ = self.lua.globals().set("AUDIO_HIGH", f32::from_bits(self.audio.high.load(Ordering::Relaxed)));
+        if let Ok(spectrum) = self.audio.spectrum.read() {
+            if let Ok(table) = self.lua.create_table() {
+                for (i, &v) in spectrum.iter().enumerate() {
+                    let _ = table.set(i + 1, v);
+                }
+                let _ = self.lua.globals().set("AUDIO_SPECTRUM", table);
+            }
+        }
 
         // Invoke the Lua update(buffer, dt) function.
         let keep = (|| -> LuaResult<bool> {

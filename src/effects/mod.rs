@@ -1,6 +1,7 @@
 use std::time::Duration;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock, atomic::AtomicU8};
+use crate::audio::AudioAnalysis;
 use crate::pixels::Color;
 
 pub type Buffer = Vec<Color>;
@@ -123,6 +124,7 @@ pub fn load_lua_effects(
     registry: &mut EffectRegistry,
     user_color: Arc<[AtomicU8; 3]>,
     palette: Arc<RwLock<Vec<[u8; 3]>>>,
+    audio: Arc<AudioAnalysis>,
 ) {
     let entries = match std::fs::read_dir(dir) {
         Ok(e) => e,
@@ -157,8 +159,10 @@ pub fn load_lua_effects(
             let src   = source.clone();
             let color = Arc::clone(&user_color);
             let pal   = Arc::clone(&palette);
+            let aud   = Arc::clone(&audio);
             move || Box::new(lua_effect::LuaEffect::new(
-                static_name, src.clone(), num_pixels, Arc::clone(&color), Arc::clone(&pal),
+                static_name, src.clone(), num_pixels,
+                Arc::clone(&color), Arc::clone(&pal), Arc::clone(&aud),
             ))
         });
     }

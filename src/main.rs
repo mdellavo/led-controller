@@ -2,8 +2,11 @@ mod pixels;
 mod effects;
 mod runner;
 mod api;
+mod audio;
 
 use std::sync::{Arc, RwLock, atomic::AtomicU8};
+
+use audio::AudioAnalysis;
 
 use axum::{routing::{get, post}, Router};
 use clap::Parser;
@@ -164,15 +167,20 @@ async fn main() -> anyhow::Result<()> {
     // Registry factory — called when pixel count changes
     // -----------------------------------------------------------------------
 
+    let audio_analysis: Arc<AudioAnalysis> = Arc::new(AudioAnalysis::new());
+    let initial_audio_devices = audio::list_input_devices();
+
     let effects_dir = args.effects_dir.clone();
-    let user_color_for_factory = Arc::clone(&user_color);
-    let palette_for_factory    = Arc::clone(&palette);
+    let user_color_for_factory  = Arc::clone(&user_color);
+    let palette_for_factory     = Arc::clone(&palette);
+    let audio_for_factory       = Arc::clone(&audio_analysis);
     let registry_factory: RegistryFactory = Arc::new(move |n: usize| {
         let mut r = default_registry(n);
         effects::load_lua_effects(
             &effects_dir, n, &mut r,
             Arc::clone(&user_color_for_factory),
             Arc::clone(&palette_for_factory),
+            Arc::clone(&audio_for_factory),
         );
         r
     });
@@ -187,6 +195,7 @@ async fn main() -> anyhow::Result<()> {
         &args.effects_dir, num_pixels, &mut registry,
         Arc::clone(&user_color),
         Arc::clone(&palette),
+        Arc::clone(&audio_analysis),
     );
 
     let config = RunnerConfig {
@@ -200,6 +209,8 @@ async fn main() -> anyhow::Result<()> {
         state_file: Some(args.state_file),
         user_color,
         palette,
+        audio_analysis,
+        initial_audio_devices,
     };
 
     let runner = Runner::new(pixels, registry, config, pixel_factory, registry_factory);

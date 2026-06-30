@@ -19,12 +19,20 @@ anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-
 [features]
-hardware = ["rs_ws281x"]
+hardware = ["dep:rs_ws281x"]
+audio    = ["dep:cpal", "dep:rustfft"]
 
 [dependencies.rs_ws281x]
 version = "0.3"
+optional = true
+
+[dependencies.cpal]
+version = "0.15"
+optional = true
+
+[dependencies.rustfft]
+version = "6"
 optional = true
 
 [profile.release]

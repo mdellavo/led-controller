@@ -11,7 +11,7 @@ A Rust web server for controlling WS2812B LED strips (NeoPixels) on a Raspberry 
 - Gamma correction — perceptual brightness LUT applied at hardware write (configurable exponent, default 2.2)
 - Auto-advance: configurable per-effect play time before moving to the next playlist entry
 - Full playlist management: add, remove, drag-to-reorder, shuffle; drag works on both desktop and mobile touch
-- **81 effects** — all written in Lua, loaded from the `effects/` directory at startup
+- **84 effects** — all written in Lua, loaded from the `effects/` directory at startup
 - Lua effect system — add or edit effects without recompiling; any `.lua` file in `effects/` is registered automatically
 - Per-effect descriptions shown in the UI — each effect file declares a `description` string
 - Status box shows current effect name, play timer (updated every second), and achieved FPS (updated every 5 s)
@@ -22,13 +22,22 @@ A Rust web server for controlling WS2812B LED strips (NeoPixels) on a Raspberry 
 - Mobile-friendly UI — 44 px touch targets, pointer-event drag-to-reorder, always-visible controls on touch devices
 - `NullPixels` dev mode (no hardware required) with debug logging
 - Single binary deployment — Lua VM is vendored; no runtime dependencies on the target beyond the binary and the `effects/` directory
+- **Audio reactive** — capture from any system input device; exposes amplitude, beat envelope, bass/mid/high bands, and a 16-band spectrum to every Lua effect
 
 ## Changelog
 
 **Current**
+- Audio reactive effects: USB mic or any system input device selectable from the web UI; device list refreshable without restart; VU meter and beat indicator in the UI
+- Exposes `AUDIO_AMP`, `AUDIO_BEAT`, `AUDIO_BASS`, `AUDIO_MID`, `AUDIO_HIGH`, `AUDIO_SPECTRUM[16]` as Lua globals, updated every frame
+- Three audio effects: Audio Pulse, Audio Beat Flash, Audio Spectrum
+- `audio` Cargo feature — `cpal` and `rustfft` are optional; dev builds on macOS compile without them; Pi builds enable with `--features audio`
+- `Cross.toml` — installs `libasound2-dev:arm64` in the cross-compilation container for ALSA support
+
+**v0.3**
 - 81 effects, all running as Lua scripts loaded from `effects/` at startup
 - Lua effect system: hot-load effects without recompiling; each file exports `name`, `description`, `init(n)`, and `update(buf, dt)`
 - Custom color picker in the web UI — choose a color applied to Solid Color, Color Wipe, Running Lights, Strobe, Meteor Rain, Theatre Chase, and Twinkle without editing code; color randomized on each start
+- Per-effect color palette — up to 8 swatches configurable in the web UI; available as `PALETTE[i]` and `PALETTE_SIZE` in every Lua effect; initialized to 5 evenly-spaced random hues on startup
 - Per-effect description shown below the effect selector in the web UI
 - Status box: live play timer (resets on effect change) and FPS counter
 - Graceful shutdown: SIGINT/SIGTERM fades the strip to black over 500 ms before the process exits
@@ -117,7 +126,7 @@ RUST_LOG=led_controller=debug cargo run
 
 ### Cross-compiling for the Raspberry Pi
 
-Use `build-pi.sh`, which wraps [`cross`](https://github.com/cross-rs/cross) (Docker-based cross compilation). `cross` handles the C toolchain needed for the `hardware` feature automatically.
+Use `build-pi.sh`, which wraps [`cross`](https://github.com/cross-rs/cross) (Docker-based cross compilation). `cross` handles the C toolchain needed for the `hardware` feature automatically. `Cross.toml` adds the ALSA headers needed for the `audio` feature.
 
 **Prerequisites:**
 
@@ -130,6 +139,12 @@ cargo install cross
 
 ```bash
 ./build-pi.sh --deploy pi@raspberrypi.local
+```
+
+**With audio reactive support:**
+
+```bash
+./build-pi.sh --features audio --deploy pi@raspberrypi.local
 ```
 
 **Pass app flags through with `--`:**
@@ -163,6 +178,7 @@ Script flags (before `--`):
 |---|---|---|
 | `--target <triple>` | `aarch64-unknown-linux-gnu` | Rust target triple |
 | `--no-hardware` | off | Build without the hardware feature (NullPixels) |
+| `--features <list>` | — | Extra Cargo features (e.g. `audio`) |
 | `--deploy user@host` | — | SCP the binary to the Pi after building |
 
 ### On the Raspberry Pi
@@ -254,16 +270,22 @@ Open `http://<pi-ip>:3000` in a browser.
 | **Playlist** | Ordered list of effects to cycle through. Drag `⠿` to reorder, click `✕` to remove, click effect name to play it. Dropdown + **Add** to append any effect. **Shuffle** to randomise order. |
 | **Speed** | Multiplier applied to every effect's time delta (0.1× – 10.0×, live) |
 | **Brightness** | Software brightness scale applied to all pixel output (0–100%, live) |
+| **Color** | Single color picker — injected as `COLOR_R/G/B` into every Lua effect each frame |
+| **Palette** | Up to 8 color swatches — injected as `PALETTE[i]` and `PALETTE_SIZE` into every Lua effect each frame |
+| **Audio Input** | Device dropdown with refresh button; VU meter bar and beat indicator; exposes `AUDIO_*` globals to Lua |
 | **Effect Duration** | How long each effect plays before auto-advancing (0 = manual only) |
 | **Transition Durations** | Separate sliders for fade-in, crossfade, and fade-out |
 | **Hardware Settings** | Color order (live), gamma (live), LED count and GPIO pin (apply button — reinitializes hardware) |
 
 ## Effects
 
-All 81 effects are Lua scripts in the `effects/` directory.
+All 84 effects are Lua scripts in the `effects/` directory.
 
 | Effect | Description |
 |---|---|
+| 🎵 Audio Pulse | Whole strip pulses with audio amplitude; color is a real-time mix of bass (red), mid (green), and high (blue) |
+| 🥁 Audio Beat Flash | Flashes white on each detected beat over a slowly hue-cycling color background |
+| 🎸 Audio Spectrum | Displays the 16-band frequency spectrum as a bar graph — bass on the left, treble on the right |
 | 🌌 Aurora | Four overlapping sine-wave bands of green, teal, blue, and purple shimmer at independent speeds |
 | 🦑 Bioluminescence | Deep ocean darkness with expanding blue-green pulses, like disturbed bioluminescent plankton |
 | 🌸 Bloom | Rings of color bloom outward from random seed points and fade |
@@ -375,15 +397,21 @@ end
 | `buf:plot(pos, r, g, b, alpha)` | Sub-pixel antialiased write at fractional position (wraps via `rem_euclid`) |
 | `buf:fade(per_second, dt)` | Multiply all pixels by `per_second ^ dt` — frame-rate-independent trail decay |
 
-### Color and palette globals
+### Globals injected every frame
 
-Two sets of globals are injected before every `update()` call:
+All globals are 0 / empty when the corresponding feature is inactive (no device selected, no palette configured).
 
 | Global | Type | Description |
 |---|---|---|
 | `COLOR_R`, `COLOR_G`, `COLOR_B` | integer 0–255 | Single user-chosen color from the Color card |
 | `PALETTE` | table | 1-indexed table; each entry is `{r, g, b}` (integers 0–255) |
-| `PALETTE_SIZE` | integer | Number of colors in the palette (0 if empty) |
+| `PALETTE_SIZE` | integer | Number of colors currently in the palette (0 if empty) |
+| `AUDIO_AMP` | float 0–1 | Smoothed RMS amplitude (auto-gain normalized to recent peak) |
+| `AUDIO_BEAT` | float 0–1 | Beat envelope — spikes to 1.0 on each detected beat, decays ~150 ms half-life |
+| `AUDIO_BASS` | float 0–1 | Normalized energy in 20–200 Hz |
+| `AUDIO_MID` | float 0–1 | Normalized energy in 200 Hz – 4 kHz |
+| `AUDIO_HIGH` | float 0–1 | Normalized energy in 4–20 kHz |
+| `AUDIO_SPECTRUM` | table[16] | 1-indexed; 16 log-spaced bands from 20 Hz to 20 kHz, each 0–1 |
 
 ```lua
 -- Single color
@@ -399,6 +427,12 @@ end
 
 -- Cycle through palette by index
 local c = PALETTE[(math.floor(t) % PALETTE_SIZE) + 1]
+
+-- Beat flash
+local flash = math.floor((AUDIO_BEAT or 0) * 255)
+
+-- Spectrum bar for band i (1–16)
+local level = AUDIO_SPECTRUM and AUDIO_SPECTRUM[i] or 0
 ```
 
 `buf:plot` splits brightness between the two adjacent integer pixels by the fractional part, giving smooth motion without pixel-level jitter. `buf:fade` keeps trail lengths consistent regardless of frame rate or speed setting — use `0.85^60` to mean "decay to 85% at 60 fps per frame".
@@ -440,7 +474,13 @@ Reconnect automatically on close; the server resends the full current state on e
   "gamma": 2.2,
   "num_pixels": 60,
   "gpio_pin": 18,
-  "color_order": "rgb"
+  "color_order": "rgb",
+  "user_color": [255, 128, 0],
+  "palette": [[255,0,0],[0,255,0],[0,0,255]],
+  "audio_devices": ["Built-in Microphone", "USB Audio Device"],
+  "audio_device": "USB Audio Device",
+  "audio_amplitude": 0.42,
+  "audio_beat": 0.87
 }
 ```
 
@@ -472,7 +512,10 @@ Reconnect automatically on close; the server resends the full current state on e
 | `set_color_order` | `effect` | Set physical channel order string (e.g. `"grb"`) |
 | `set_num_pixels` | `value_ms` | Reinitialize with a new pixel count |
 | `set_gpio_pin` | `value_ms` | Reinitialize hardware on a different GPIO pin |
+| `set_color` | `r`, `g`, `b` | Set the user color (integers 0–255 each) |
 | `set_palette` | `palette` | Set the palette — array of `{"r":…,"g":…,"b":…}` objects (max 8) |
+| `set_audio_device` | `effect` | Start capturing from the named device (`null` or omit to stop) |
+| `refresh_audio_devices` | — | Re-enumerate input devices and update `audio_devices` in state |
 
 ## Project structure
 
@@ -480,16 +523,19 @@ Reconnect automatically on close; the server resends the full current state on e
 src/
 ├── main.rs              entry point — CLI flags, Axum server, graceful shutdown
 ├── pixels.rs            PixelStrip trait, NullPixels (dev), NeoPixelStrip (hardware), gamma LUT
+├── audio.rs             AudioAnalysis shared state, AudioHandle RAII, list_input_devices /
+│                        start_audio (compiled only with --features audio; stubs otherwise)
 ├── runner.rs            effect thread management, fade/crossfade state machine, playlist,
-│                        persistent state, hardware reinit factories
+│                        persistent state, hardware reinit factories, audio handle lifecycle
 ├── api.rs               Axum route handlers
 └── effects/
     ├── mod.rs           Effect trait, EffectRegistry (with Lua auto-load), LuaBuf helpers
-    └── lua_effect.rs    LuaEffect wrapper — Lua VM per effect, probe_metadata
-effects/                 81 Lua effect scripts (auto-discovered at startup)
+    └── lua_effect.rs    LuaEffect wrapper — Lua VM per effect, globals injection, probe_metadata
+effects/                 84 Lua effect scripts (auto-discovered at startup)
 static/
 ├── index.html           control panel (embedded in binary via include_str!)
 └── app.js               frontend JS (embedded in binary via include_str!)
+Cross.toml               cross-compilation config — installs libasound2-dev:arm64 for audio feature
 led-state.json           persisted UI state (created automatically on first run)
 ```
 
@@ -501,7 +547,6 @@ led-state.json           persisted UI state (created automatically on first run)
 - **Basic auth** — single username/password so the UI is not open to everyone on the local network
 
 ### Effects
-- **Audio reactive** — sample a USB mic/dongle and drive brightness or color from beat detection or amplitude
 - **Segmented effects** — run different effects on different sections of the strip simultaneously
 
 ## Transition behavior

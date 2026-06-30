@@ -374,6 +374,32 @@
     }
     .swatch-remove:hover { color: var(--red); }
 
+    /* Audio VU meter */
+    .audio-vu-track {
+      height: 8px;
+      background: var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 0.5rem;
+    }
+    .audio-vu-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(to right, var(--green), var(--orange), var(--red));
+      border-radius: 4px;
+      transition: width 0.08s linear;
+    }
+    .beat-dot {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+      opacity: 0;
+      transition: opacity 0.05s;
+    }
+    .beat-dot.active { opacity: 1; }
+
     /* Touch devices — no hover state, so show controls unconditionally */
     @media (hover: none) {
       .item-remove { opacity: 0.7; }
@@ -496,6 +522,28 @@
         <button id="palette-add" class="btn" style="flex:0">+ Add color</button>
         <span class="hw-note" style="margin:0;padding-left:0.5rem">Max 8. Available in Lua as <code>PALETTE[i]</code> and <code>PALETTE_SIZE</code>.</span>
       </div>
+    </div>
+
+    <!-- Audio Input -->
+    <div class="card">
+      <div class="card-title">Audio Input</div>
+      <div class="hw-row" style="margin-top:0">
+        <label>Device</label>
+        <div style="display:flex;gap:0.5rem;flex:1">
+          <select id="audio-device" style="flex:1">
+            <option value="">— Off —</option>
+          </select>
+          <button id="btn-refresh-audio" class="btn-secondary" style="flex:0;padding:0 0.75rem;min-width:auto">↺</button>
+        </div>
+      </div>
+      <div class="audio-vu-track">
+        <div id="audio-vu-bar" class="audio-vu-fill"></div>
+      </div>
+      <div class="hw-note" style="margin-top:0.35rem;display:flex;justify-content:space-between;align-items:center">
+        <span id="audio-vu-label">Select a device to enable audio reactive effects</span>
+        <span class="beat-dot" id="audio-beat-dot"></span>
+      </div>
+      <p class="hw-note" style="margin-top:0.625rem">Exposes <code>AUDIO_AMP</code>, <code>AUDIO_BEAT</code>, <code>AUDIO_BASS</code>, <code>AUDIO_MID</code>, <code>AUDIO_HIGH</code>, <code>AUDIO_SPECTRUM[16]</code> to Lua effects.</p>
     </div>
 
     <!-- Effect duration -->

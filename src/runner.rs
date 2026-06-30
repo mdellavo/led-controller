@@ -9,6 +9,7 @@ use tokio::sync::broadcast;
 
 use rand::seq::SliceRandom;
 
+use crate::audio::{self, AudioAnalysis, AudioHandle};
 use crate::effects::{Effect, Buffer, EffectRegistry};
 use crate::pixels::{Color, ColorOrder, PixelStrip, build_gamma_lut};
 
@@ -208,6 +209,8 @@ pub enum Command {
     SetGpioPin(i32),
     SetUserColor(u8, u8, u8),
     SetPalette(Vec<[u8; 3]>),
+    SetAudioDevice(Option<String>),
+    RefreshAudioDevices,
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -233,6 +236,10 @@ pub struct SharedState {
     pub color_order: String,
     pub user_color: [u8; 3],
     pub palette: Vec<[u8; 3]>,
+    pub audio_devices: Vec<String>,
+    pub audio_device: Option<String>,
+    pub audio_amplitude: f32,
+    pub audio_beat: f32,
 }
 
 // --------------------------------------------------------------------------
@@ -260,6 +267,10 @@ pub struct RunnerConfig {
     pub user_color: Arc<[AtomicU8; 3]>,
     /// Shared palette — written by SetPalette, snapshotted by every LuaEffect VM each frame.
     pub palette: Arc<RwLock<Vec<[u8; 3]>>>,
+    /// Shared audio analysis — written by the audio thread, read by every LuaEffect VM each frame.
+    pub audio_analysis: Arc<AudioAnalysis>,
+    /// Pre-populated audio device list for the initial SharedState.
+    pub initial_audio_devices: Vec<String>,
 }
 
 impl Default for RunnerConfig {
@@ -272,6 +283,8 @@ impl Default for RunnerConfig {
             initial_playlist: None, initial_playlist_index: 0, state_file: None,
             user_color: Arc::new([AtomicU8::new(255), AtomicU8::new(255), AtomicU8::new(255)]),
             palette: Arc::new(RwLock::new(Vec::new())),
+            audio_analysis: Arc::new(AudioAnalysis::new()),
+            initial_audio_devices: Vec::new(),
         }
     }
 }
@@ -323,6 +336,7 @@ impl Runner {
         let initial_palette = config.palette.read()
             .map(|g| g.clone())
             .unwrap_or_default();
+        let initial_audio_devices = config.initial_audio_devices.clone();
         let shared_state = Arc::new(Mutex::new(SharedState {
             is_running: false,
             current_effect: None,
@@ -345,6 +359,10 @@ impl Runner {
             color_order: color_order_str,
             user_color: initial_user_color,
             palette: initial_palette,
+            audio_devices: initial_audio_devices,
+            audio_device: None,
+            audio_amplitude: 0.0,
+            audio_beat: 0.0,
         }));
 
         let state_clone  = Arc::clone(&shared_state);
@@ -431,6 +449,8 @@ fn run_loop(
     let mut color_order = config.color_order;
     let mut gpio_pin    = config.gpio_pin;
     let hw_brightness   = config.hw_brightness;
+    let mut audio_handle: Option<AudioHandle> = None;
+    let mut audio_tick: u32 = 0;
 
     let mut black = vec![[0u8; 3]; num_pixels];
     let mut state = RunnerState::Idle;
@@ -645,6 +665,36 @@ fn run_loop(
                     if let Ok(mut pal) = config.palette.write() { *pal = colors.clone(); }
                     if let Ok(mut s) = shared.lock() { s.palette = colors; }
                 }
+                Command::SetAudioDevice(device_name) => {
+                    audio_handle = None; // drop old handle → stops capture thread
+                    config.audio_analysis.zero();
+                    if let Some(ref name) = device_name {
+                        match audio::start_audio(name, Arc::clone(&config.audio_analysis)) {
+                            Ok(h) => audio_handle = Some(h),
+                            Err(e) => tracing::error!("audio start failed: {e}"),
+                        }
+                    }
+                    if let Ok(mut s) = shared.lock() { s.audio_device = device_name; }
+                }
+                Command::RefreshAudioDevices => {
+                    let devices = audio::list_input_devices();
+                    if let Ok(mut s) = shared.lock() { s.audio_devices = devices; }
+                }
+            }
+        }
+
+        // Sync audio levels into SharedState every ~6 frames (100 ms) for VU meter.
+        audio_tick += 1;
+        if audio_handle.is_some() && audio_tick >= 6 {
+            audio_tick = 0;
+            let amp  = config.audio_analysis.load_amplitude();
+            let beat = config.audio_analysis.load_beat();
+            if let Ok(mut s) = shared.lock() {
+                let changed = (s.audio_amplitude - amp).abs() > 0.005
+                    || (s.audio_beat - beat).abs() > 0.01;
+                s.audio_amplitude = amp;
+                s.audio_beat      = beat;
+                if changed { dirty = true; }
             }
         }
 
