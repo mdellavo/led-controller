@@ -83,6 +83,18 @@ const EFFECT_ICONS = {
   'Audio Pulse':           '🎵',
   'Audio Beat Flash':      '🥁',
   'Audio Spectrum':        '🎸',
+  'Beat Bounce':           '🏀',
+  'Beat Confetti':         '🎉',
+  'Beat Comet':            '🛸',
+  'Spectrum Waterfall':    '🌊',
+  'Frequency Comets':      '🎠',
+  'Harmonic Rings':        '🎶',
+  'Audio Fire':            '🔆',
+  'Audio Twinkle':         '💎',
+  'Crowd Surf':            '🏄',
+  'Bass Treble Split':     '🎚️',
+  'Audio Plasma':          '🫀',
+  'Spectrum Snake':        '🐉',
 };
 
 const effectLabel = (name) => EFFECT_ICONS[name] ? `${EFFECT_ICONS[name]} ${name}` : name;
