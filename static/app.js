@@ -542,14 +542,26 @@ document.getElementById('btn-refresh-audio').addEventListener('click', () => {
   api('refresh_audio_devices');
 });
 
+const friendlyDeviceName = (name) => {
+  // ALSA names like "hw:CARD=USB Audio Device,DEV=0" → "USB Audio Device"
+  const card = name.match(/CARD=([^,]+)/);
+  if (card) return card[1].trim();
+  // "sysdefault" / "default" variants
+  if (/^(sysdefault|default)$/.test(name)) return 'System Default';
+  // "hw:0,0" or "plughw:1,0"
+  const hw = name.match(/^(?:plug)?hw:(\d+)(?:,\d+)?$/);
+  if (hw) return `Hardware Device ${hw[1]}`;
+  // Already readable (macOS CoreAudio names, Pi friendly names, etc.)
+  return name;
+};
+
 const renderAudioDevices = (devices, active) => {
-  // Preserve selection if unchanged
   const prev = audioDeviceSel.value;
   audioDeviceSel.innerHTML = '<option value="">— Off —</option>';
   (devices || []).forEach((name) => {
     const opt = document.createElement('option');
     opt.value = name;
-    opt.textContent = name;
+    opt.textContent = friendlyDeviceName(name);
     audioDeviceSel.appendChild(opt);
   });
   // Restore: prefer active from server, else previous selection
