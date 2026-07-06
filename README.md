@@ -11,7 +11,7 @@ A Rust web server for controlling WS2812B LED strips (NeoPixels) on a Raspberry 
 - Gamma correction — perceptual brightness LUT applied at hardware write (configurable exponent, default 2.2)
 - Auto-advance: configurable per-effect play time before moving to the next playlist entry
 - Full playlist management: add, remove, drag-to-reorder, shuffle; drag works on both desktop and mobile touch
-- **84 effects** — all written in Lua, loaded from the `effects/` directory at startup
+- **96 effects** — all written in Lua, loaded from the `effects/` directory at startup
 - Lua effect system — add or edit effects without recompiling; any `.lua` file in `effects/` is registered automatically
 - Per-effect descriptions shown in the UI — each effect file declares a `description` string
 - Status box shows current effect name, play timer (updated every second), and achieved FPS (updated every 5 s)
@@ -27,9 +27,13 @@ A Rust web server for controlling WS2812B LED strips (NeoPixels) on a Raspberry 
 ## Changelog
 
 **Current**
+- 12 additional audio reactive effects (96 total): Beat Bounce, Beat Confetti, Beat Comet, Spectrum Waterfall, Frequency Comets, Harmonic Rings, Audio Fire, Audio Twinkle, Crowd Surf, Bass Treble Split, Audio Plasma, Spectrum Snake
+- Static files are embedded in the binary at compile time — rebuild (`cargo run --features audio`) to pick up HTML/JS changes
+
+**v0.4**
 - Audio reactive effects: USB mic or any system input device selectable from the web UI; device list refreshable without restart; VU meter and beat indicator in the UI
 - Exposes `AUDIO_AMP`, `AUDIO_BEAT`, `AUDIO_BASS`, `AUDIO_MID`, `AUDIO_HIGH`, `AUDIO_SPECTRUM[16]` as Lua globals, updated every frame
-- Three audio effects: Audio Pulse, Audio Beat Flash, Audio Spectrum
+- First audio effects: Audio Pulse, Audio Beat Flash, Audio Spectrum
 - `audio` Cargo feature — `cpal` and `rustfft` are optional; dev builds on macOS compile without them; Pi builds enable with `--features audio`
 - `Cross.toml` — installs `libasound2-dev:arm64` in the cross-compilation container for ALSA support
 
@@ -279,13 +283,25 @@ Open `http://<pi-ip>:3000` in a browser.
 
 ## Effects
 
-All 84 effects are Lua scripts in the `effects/` directory.
+All 96 effects are Lua scripts in the `effects/` directory.
 
 | Effect | Description |
 |---|---|
 | 🎵 Audio Pulse | Whole strip pulses with audio amplitude; color is a real-time mix of bass (red), mid (green), and high (blue) |
 | 🥁 Audio Beat Flash | Flashes white on each detected beat over a slowly hue-cycling color background |
+| 🔆 Audio Fire | Fire simulation driven by audio — silence leaves cold embers, loud peaks drive flames to the tips, and beats send explosive flares |
+| 🫀 Audio Plasma | Plasma interference pattern whose four wave frequencies are modulated in real-time by spectrum bands |
 | 🎸 Audio Spectrum | Displays the 16-band frequency spectrum as a bar graph — bass on the left, treble on the right |
+| 💎 Audio Twinkle | Stars spawn at a rate proportional to amplitude; beats send a white flash that fades back to the starfield |
+| 🎚️ Bass Treble Split | Left half pulses warm red/orange with bass; right half shimmers cool blue/white with treble; split point slides with mid energy |
+| 🏀 Beat Bounce | Balls launch from both ends of the strip on each beat; harder hits mean faster balls |
+| 🎉 Beat Confetti | On each beat a burst of colorful dots scatter from a random position and drift outward |
+| 🛸 Beat Comet | A bright comet launches on each beat — harder hits make faster comets with longer trails |
+| 🏄 Crowd Surf | Particles drift lazily at silence; loud audio multiplies and speeds them up; beats reverse all particles simultaneously |
+| 🎠 Frequency Comets | Three comets orbit the strip — bass (red), mid (green), treble (blue); each brightens and accelerates when its band is active |
+| 🎶 Harmonic Rings | 16 sine waves layered additively — each wave's amplitude tracks its frequency band; the superposition morphs with the music |
+| 🐉 Spectrum Snake | A snake speeds up on each beat and shifts color toward the dominant frequency band |
+| 🌊 Spectrum Waterfall | The frequency spectrum scrolls as a color history — newest slice on the left, bass=red, mid=green, treble=blue |
 | 🌌 Aurora | Four overlapping sine-wave bands of green, teal, blue, and purple shimmer at independent speeds |
 | 🦑 Bioluminescence | Deep ocean darkness with expanding blue-green pulses, like disturbed bioluminescent plankton |
 | 🌸 Bloom | Rings of color bloom outward from random seed points and fade |
@@ -531,7 +547,7 @@ src/
 └── effects/
     ├── mod.rs           Effect trait, EffectRegistry (with Lua auto-load), LuaBuf helpers
     └── lua_effect.rs    LuaEffect wrapper — Lua VM per effect, globals injection, probe_metadata
-effects/                 84 Lua effect scripts (auto-discovered at startup)
+effects/                 96 Lua effect scripts (auto-discovered at startup)
 static/
 ├── index.html           control panel (embedded in binary via include_str!)
 └── app.js               frontend JS (embedded in binary via include_str!)
