@@ -553,14 +553,18 @@ const baseDeviceName = (name) => {
 };
 
 const deviceTypeSuffix = (name) => {
-  if (name.startsWith('plughw:'))    return 'plug';
-  if (name.startsWith('sysdefault:'))return 'sysdefault';
-  if (name.startsWith('default:'))   return 'default';
+  if (name.startsWith('plughw:'))     return 'plug';
+  if (name.startsWith('sysdefault:')) return 'sysdefault';
+  if (name.startsWith('default:'))    return 'default';
   if (name.startsWith('hw:')) {
     const dev = name.match(/DEV=(\d+)/);
     return dev && dev[1] !== '0' ? `hw·dev${dev[1]}` : 'hw';
   }
-  return null;
+  // Generic fallback: use whatever prefix appears before the colon
+  const colon = name.indexOf(':');
+  if (colon > 0) return name.slice(0, colon);
+  // No colon at all — use the full raw name as the disambiguator
+  return name;
 };
 
 const renderAudioDevices = (devices, active) => {
