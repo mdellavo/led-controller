@@ -542,29 +542,46 @@ document.getElementById('btn-refresh-audio').addEventListener('click', () => {
   api('refresh_audio_devices');
 });
 
-const friendlyDeviceName = (name) => {
-  // ALSA names like "hw:CARD=USB Audio Device,DEV=0" → "USB Audio Device"
+const baseDeviceName = (name) => {
+  // Extract CARD name from ALSA names like "hw:CARD=USB Audio,DEV=0"
   const card = name.match(/CARD=([^,]+)/);
   if (card) return card[1].trim();
-  // "sysdefault" / "default" variants
   if (/^(sysdefault|default)$/.test(name)) return 'System Default';
-  // "hw:0,0" or "plughw:1,0"
   const hw = name.match(/^(?:plug)?hw:(\d+)(?:,\d+)?$/);
   if (hw) return `Hardware Device ${hw[1]}`;
-  // Already readable (macOS CoreAudio names, Pi friendly names, etc.)
   return name;
+};
+
+const deviceTypeSuffix = (name) => {
+  if (name.startsWith('plughw:'))    return 'plug';
+  if (name.startsWith('sysdefault:'))return 'sysdefault';
+  if (name.startsWith('default:'))   return 'default';
+  if (name.startsWith('hw:')) {
+    const dev = name.match(/DEV=(\d+)/);
+    return dev && dev[1] !== '0' ? `hw·dev${dev[1]}` : 'hw';
+  }
+  return null;
 };
 
 const renderAudioDevices = (devices, active) => {
   const prev = audioDeviceSel.value;
   audioDeviceSel.innerHTML = '<option value="">— Off —</option>';
-  (devices || []).forEach((name) => {
+
+  const list = (devices || []).map(name => ({ name, base: baseDeviceName(name) }));
+
+  // Count how many times each base name appears
+  const counts = {};
+  list.forEach(({ base }) => { counts[base] = (counts[base] || 0) + 1; });
+
+  list.forEach(({ name, base }) => {
     const opt = document.createElement('option');
     opt.value = name;
-    opt.textContent = friendlyDeviceName(name);
+    // If the base name is ambiguous, append the interface type to distinguish
+    const suffix = counts[base] > 1 ? deviceTypeSuffix(name) : null;
+    opt.textContent = suffix ? `${base} (${suffix})` : base;
     audioDeviceSel.appendChild(opt);
   });
-  // Restore: prefer active from server, else previous selection
+
   audioDeviceSel.value = active || prev || '';
 };
 
