@@ -99,13 +99,74 @@ const EFFECT_ICONS = {
 
 const effectLabel = (name) => EFFECT_ICONS[name] ? `${EFFECT_ICONS[name]} ${name}` : name;
 
-const updateEffectHint = () => {
-  const sel = document.getElementById('effect-select');
-  const opt = sel.options[sel.selectedIndex];
-  document.getElementById('effect-hint').textContent = opt?.dataset?.description || '';
+// --------------------------------------------------------------------------
+// Custom effect picker
+// --------------------------------------------------------------------------
+
+let selectedEffect = null;
+let allEffectOptions = []; // [{ name, label, desc }, ...]
+
+const pickerTrigger = document.getElementById('effect-picker-trigger');
+const pickerPanel   = document.getElementById('effect-picker-panel');
+const pickerLabel   = document.getElementById('effect-picker-label');
+const pickerSearch  = document.getElementById('effect-picker-search');
+const pickerList    = document.getElementById('effect-picker-list');
+
+const openPicker = () => {
+  pickerPanel.hidden = false;
+  pickerTrigger.classList.add('open');
+  pickerSearch.value = '';
+  renderPickerList('');
+  pickerSearch.focus();
 };
 
-document.getElementById('effect-select').addEventListener('change', updateEffectHint);
+const closePicker = () => {
+  pickerPanel.hidden = true;
+  pickerTrigger.classList.remove('open');
+};
+
+const renderPickerList = (filter) => {
+  const q = filter.trim().toLowerCase();
+  pickerList.innerHTML = '';
+  allEffectOptions
+    .filter(({ label, name, desc }) =>
+      !q || name.toLowerCase().includes(q) || label.toLowerCase().includes(q) || (desc || '').toLowerCase().includes(q)
+    )
+    .forEach(({ name, label, desc }) => {
+      const el = document.createElement('div');
+      el.className = 'effect-option' + (name === selectedEffect ? ' active' : '');
+      el.dataset.name = name;
+      const nameEl = document.createElement('div');
+      nameEl.className = 'effect-option-name';
+      nameEl.textContent = label;
+      el.appendChild(nameEl);
+      if (desc) {
+        const descEl = document.createElement('div');
+        descEl.className = 'effect-option-desc';
+        descEl.textContent = desc;
+        el.appendChild(descEl);
+      }
+      el.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        selectedEffect = name;
+        pickerLabel.textContent = label;
+        closePicker();
+      });
+      pickerList.appendChild(el);
+    });
+};
+
+pickerTrigger.addEventListener('click', () => {
+  pickerPanel.hidden ? openPicker() : closePicker();
+});
+
+pickerSearch.addEventListener('input', () => renderPickerList(pickerSearch.value));
+
+document.addEventListener('pointerdown', (e) => {
+  if (!pickerPanel.hidden && !document.getElementById('effect-picker').contains(e.target)) {
+    closePicker();
+  }
+});
 
 const api = async (action, extra = {}) => {
   try {
@@ -136,8 +197,7 @@ document.getElementById('btn-shuffle').onclick = () => api('randomize');
 
 // Play selected effect
 document.getElementById('btn-play-selected').onclick = () => {
-  const name = document.getElementById('effect-select').value;
-  if (name) api('select', { effect: name });
+  if (selectedEffect) api('select', { effect: selectedEffect });
 };
 
 // Add to playlist
@@ -432,31 +492,30 @@ const renderState = (state) => {
   const fpsEl = document.getElementById('status-fps');
   fpsEl.textContent = state.fps ? `${Math.round(state.fps)} fps` : '';
 
-  // Populate effect dropdowns (once, or when effect list changes)
+  // Populate effect picker + playlist-add-select (once, or when effect list changes)
   if (!lastState || lastState.effects.length !== state.effects.length) {
     const sorted = [...state.effects].sort((a, b) => a.localeCompare(b));
     const descs  = state.effect_descriptions || {};
-    ['effect-select', 'playlist-add-select'].forEach((id) => {
-      const withDesc = id === 'effect-select';
-      const sel = document.getElementById(id);
-      const prev = sel.value;
-      sel.innerHTML = '';
-      sorted.forEach((name) => {
-        const opt  = document.createElement('option');
-        const desc = descs[name];
-        opt.value  = name;
-        if (withDesc && desc) {
-          const short = desc.length > 60 ? desc.slice(0, 57) + '…' : desc;
-          opt.textContent = `${effectLabel(name)} — ${short}`;
-        } else {
-          opt.textContent = effectLabel(name);
-        }
-        if (desc) opt.dataset.description = desc;
-        sel.appendChild(opt);
-      });
-      if (prev) sel.value = prev;
+
+    // Custom picker data
+    allEffectOptions = sorted.map((name) => ({
+      name,
+      label: effectLabel(name),
+      desc: descs[name] || '',
+    }));
+    if (!pickerPanel.hidden) renderPickerList(pickerSearch.value);
+
+    // Playlist-add native select
+    const addSel = document.getElementById('playlist-add-select');
+    const prev   = addSel.value;
+    addSel.innerHTML = '';
+    sorted.forEach((name) => {
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = effectLabel(name);
+      addSel.appendChild(opt);
     });
-    updateEffectHint();
+    if (prev) addSel.value = prev;
   }
 
   // Playlist — skip re-render during drag to avoid interrupting the interaction
