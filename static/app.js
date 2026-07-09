@@ -434,15 +434,23 @@ const renderState = (state) => {
 
   // Populate effect dropdowns (once, or when effect list changes)
   if (!lastState || lastState.effects.length !== state.effects.length) {
+    const sorted = [...state.effects].sort((a, b) => a.localeCompare(b));
+    const descs  = state.effect_descriptions || {};
     ['effect-select', 'playlist-add-select'].forEach((id) => {
+      const withDesc = id === 'effect-select';
       const sel = document.getElementById(id);
       const prev = sel.value;
       sel.innerHTML = '';
-      [...state.effects].sort((a, b) => a.localeCompare(b)).forEach((name) => {
-        const opt = document.createElement('option');
-        opt.value = name;
-        opt.textContent = effectLabel(name);
-        const desc = (state.effect_descriptions || {})[name];
+      sorted.forEach((name) => {
+        const opt  = document.createElement('option');
+        const desc = descs[name];
+        opt.value  = name;
+        if (withDesc && desc) {
+          const short = desc.length > 60 ? desc.slice(0, 57) + '…' : desc;
+          opt.textContent = `${effectLabel(name)} — ${short}`;
+        } else {
+          opt.textContent = effectLabel(name);
+        }
         if (desc) opt.dataset.description = desc;
         sel.appendChild(opt);
       });
