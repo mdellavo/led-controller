@@ -258,6 +258,7 @@ pub struct SharedState {
     pub audio_bpm_locked: bool,
     pub audio_spectrum: Vec<f32>,
     pub audio_band_gains: Vec<f32>,
+    pub pixel_data: Vec<[u8; 3]>,
 }
 
 // --------------------------------------------------------------------------
@@ -384,6 +385,7 @@ impl Runner {
                 .iter()
                 .map(|a| f32::from_bits(a.load(Ordering::Relaxed)))
                 .collect(),
+            pixel_data: vec![[0u8; 3]; num_pixels],
         }));
 
         let state_clone  = Arc::clone(&shared_state);
@@ -472,6 +474,7 @@ fn run_loop(
     let hw_brightness   = config.hw_brightness;
     let mut audio_handle: Option<AudioHandle> = None;
     let mut audio_tick: u32 = 0;
+    let mut pixel_tick: u32 = 0;
     let mut tap_times: Vec<Instant> = Vec::new();
 
     let mut black = vec![[0u8; 3]; num_pixels];
@@ -842,6 +845,10 @@ fn run_loop(
             }
         }
 
+        // Snapshot pixel data for strip preview at ~15 fps (every 4 frames).
+        pixel_tick += 1;
+        let push_pixels = if pixel_tick >= 4 { pixel_tick = 0; true } else { false };
+
         // --- update shared state; push to WebSocket subscribers on any change ---
         let is_running          = state.is_active();
         let current_effect      = state.current_name().map(|n| n.to_string());
@@ -857,7 +864,9 @@ fn run_loop(
             0
         };
         if let Ok(mut s) = shared.lock() {
+            if push_pixels { s.pixel_data = output.clone(); }
             let changed = dirty
+                || push_pixels
                 || s.is_running          != is_running
                 || s.current_effect      != current_effect
                 || s.transition          != new_transition

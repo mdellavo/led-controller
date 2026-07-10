@@ -136,22 +136,48 @@ const renderPickerList = (filter) => {
       const el = document.createElement('div');
       el.className = 'effect-option' + (name === selectedEffect ? ' active' : '');
       el.dataset.name = name;
+
+      const textWrap = document.createElement('div');
+      textWrap.className = 'effect-option-text';
       const nameEl = document.createElement('div');
       nameEl.className = 'effect-option-name';
       nameEl.textContent = label;
-      el.appendChild(nameEl);
+      textWrap.appendChild(nameEl);
       if (desc) {
         const descEl = document.createElement('div');
         descEl.className = 'effect-option-desc';
         descEl.textContent = desc;
-        el.appendChild(descEl);
+        textWrap.appendChild(descEl);
       }
+
+      const previewBtn = document.createElement('button');
+      previewBtn.className = 'effect-option-preview';
+      previewBtn.textContent = '▶';
+      previewBtn.title = 'Preview on strip';
+
+      el.appendChild(textWrap);
+      el.appendChild(previewBtn);
+
       el.addEventListener('mousedown', (e) => {
+        if (e.target === previewBtn) return;
         e.preventDefault();
         selectedEffect = name;
         pickerLabel.textContent = label;
         closePicker();
       });
+
+      previewBtn.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        selectedEffect = name;
+        pickerLabel.textContent = label;
+        api('select', { effect: name });
+        // Keep picker open so user can continue browsing
+        pickerList.querySelectorAll('.effect-option').forEach(row => {
+          row.classList.toggle('active', row.dataset.name === name);
+        });
+      });
+
       pickerList.appendChild(el);
     });
 };
@@ -585,6 +611,12 @@ const renderState = (state) => {
     currentAudioDevice = serverActive;
   }
 
+  // Strip preview — update every state push (pixel_data pushed ~15 fps)
+  if (state.pixel_data) {
+    stripCanvas._lastPixels = state.pixel_data;
+    renderStrip(state.pixel_data);
+  }
+
   // Audio levels, spectrum, BPM — update every state push
   renderAudioLevels(state.audio_amplitude, state.audio_beat, state.audio_bpm, state.audio_bpm_locked);
   renderSpectrum(state.audio_spectrum);
@@ -604,6 +636,45 @@ const syncSlider = (id, valId, ms) => {
   document.getElementById(id).value = ms;
   document.getElementById(valId).textContent = (ms / 1000).toFixed(1) + 's';
 };
+
+// --------------------------------------------------------------------------
+// Strip preview canvas
+// --------------------------------------------------------------------------
+
+const stripCanvas = document.getElementById('strip-canvas');
+const stripCtx = stripCanvas.getContext('2d');
+
+const renderStrip = (pixels) => {
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = stripCanvas.clientWidth;
+  const cssH = stripCanvas.clientHeight;
+  const w = Math.round(cssW * dpr);
+  const h = Math.round(cssH * dpr);
+  if (stripCanvas.width !== w || stripCanvas.height !== h) {
+    stripCanvas.width = w;
+    stripCanvas.height = h;
+  }
+
+  if (!pixels || pixels.length === 0) {
+    stripCtx.fillStyle = '#0a0a0a';
+    stripCtx.fillRect(0, 0, w, h);
+    return;
+  }
+
+  const n = pixels.length;
+  const pw = w / n;
+  for (let i = 0; i < n; i++) {
+    const [r, g, b] = pixels[i];
+    stripCtx.fillStyle = `rgb(${r},${g},${b})`;
+    // ceil+1 avoids hairline gaps at fractional pixel widths
+    stripCtx.fillRect(Math.floor(i * pw), 0, Math.ceil(pw) + 1, h);
+  }
+};
+
+// Re-render on resize so the canvas stays sharp
+new ResizeObserver(() => {
+  if (stripCanvas._lastPixels) renderStrip(stripCanvas._lastPixels);
+}).observe(stripCanvas);
 
 // --------------------------------------------------------------------------
 // Audio device management
