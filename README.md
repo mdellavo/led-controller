@@ -4,7 +4,7 @@ A Rust web server for controlling WS2812B LED strips (NeoPixels) on a Raspberry 
 
 ## Features
 
-- Web control panel: start, stop, next, effect picker with description tooltip, playlist management
+- Web control panel: start, stop, next, rich effect picker with live search and per-effect descriptions, playlist management
 - Smooth transitions: fade in on start, fade out on stop, crossfade when switching effects — each with a configurable duration (default 3 s)
 - Sub-pixel antialiasing on all moving effects — point sources split brightness between adjacent LEDs for smooth, flicker-free motion
 - Frame-rate independent animation — all effects scale by delta time, stable at any CPU load or speed setting
@@ -13,7 +13,7 @@ A Rust web server for controlling WS2812B LED strips (NeoPixels) on a Raspberry 
 - Full playlist management: add, remove, drag-to-reorder, shuffle; drag works on both desktop and mobile touch
 - **96 effects** — all written in Lua, loaded from the `effects/` directory at startup
 - Lua effect system — add or edit effects without recompiling; any `.lua` file in `effects/` is registered automatically
-- Per-effect descriptions shown in the UI — each effect file declares a `description` string
+- Per-effect descriptions shown in the effect picker — each effect file declares a `description` string
 - Status box shows current effect name, play timer (updated every second), and achieved FPS (updated every 5 s)
 - Graceful shutdown — SIGINT/SIGTERM triggers a 500 ms fade to black before exiting
 - Persistent state — playlist, speed, brightness, gamma, color order, and all durations are saved to `led-state.json` and restored on restart
@@ -27,6 +27,10 @@ A Rust web server for controlling WS2812B LED strips (NeoPixels) on a Raspberry 
 ## Changelog
 
 **Current**
+- Rich custom effect picker replaces the native select — each option shows the effect name on one line and the full description on a second dimmed line; a live search/filter field narrows the list
+- ALSA audio device names cleaned up in the dropdown — `CARD=` name is extracted, ambiguous duplicates are disambiguated with a type suffix (hw, plug, sysdefault, etc.)
+
+**v0.5**
 - 12 additional audio reactive effects (96 total): Beat Bounce, Beat Confetti, Beat Comet, Spectrum Waterfall, Frequency Comets, Harmonic Rings, Audio Fire, Audio Twinkle, Crowd Surf, Bass Treble Split, Audio Plasma, Spectrum Snake
 - Static files are embedded in the binary at compile time — rebuild (`cargo run --features audio`) to pick up HTML/JS changes
 
@@ -42,7 +46,6 @@ A Rust web server for controlling WS2812B LED strips (NeoPixels) on a Raspberry 
 - Lua effect system: hot-load effects without recompiling; each file exports `name`, `description`, `init(n)`, and `update(buf, dt)`
 - Custom color picker in the web UI — choose a color applied to Solid Color, Color Wipe, Running Lights, Strobe, Meteor Rain, Theatre Chase, and Twinkle without editing code; color randomized on each start
 - Per-effect color palette — up to 8 swatches configurable in the web UI; available as `PALETTE[i]` and `PALETTE_SIZE` in every Lua effect; initialized to 5 evenly-spaced random hues on startup
-- Per-effect description shown below the effect selector in the web UI
 - Status box: live play timer (resets on effect change) and FPS counter
 - Graceful shutdown: SIGINT/SIGTERM fades the strip to black over 500 ms before the process exits
 - Emoji icons for all 81 effects in the web UI
@@ -270,8 +273,8 @@ Open `http://<pi-ip>:3000` in a browser.
 |---|---|
 | **Status** | Coloured dot (green = running, amber = transitioning, grey = stopped) + current effect name + play timer + FPS |
 | **Controls** | Start, Next, Stop |
-| **Select Effect** | Dropdown of all registered effects with description tooltip + Play button to jump to it immediately |
-| **Playlist** | Ordered list of effects to cycle through. Drag `⠿` to reorder, click `✕` to remove, click effect name to play it. Dropdown + **Add** to append any effect. **Shuffle** to randomise order. |
+| **Select Effect** | Custom dropdown picker — click to open a searchable list where each option shows the effect name on one line and its full description on a second dimmed line. Type to filter by name or description. **Play** jumps to the selected effect immediately. |
+| **Playlist** | Ordered list of effects to cycle through. Drag `⠿` to reorder, click `✕` to remove, click effect name to play it. Dropdown + **Add** to append any effect. **Shuffle** to randomise order. **Add All Effects** fills the playlist with every registered effect. |
 | **Speed** | Multiplier applied to every effect's time delta (0.1× – 10.0×, live) |
 | **Brightness** | Software brightness scale applied to all pixel output (0–100%, live) |
 | **Color** | Single color picker — injected as `COLOR_R/G/B` into every Lua effect each frame |
@@ -390,7 +393,7 @@ Each `.lua` file in `effects/` is auto-discovered at startup. A file must define
 
 ```lua
 name        = "My Effect"          -- display name in UI
-description = "One-line summary"   -- shown below the effect picker
+description = "One-line summary"   -- shown in the effect picker
 
 function init(n)       -- called once; n = pixel count
     -- set up local state here
@@ -516,8 +519,10 @@ Reconnect automatically on close; the server resends the full current state on e
 | `select` | `effect` | Crossfade to a named effect |
 | `randomize` | — | Shuffle the playlist and restart from position 0 |
 | `add_to_playlist` | `effect` | Append a named effect to the playlist |
+| `add_all_to_playlist` | — | Append every registered effect to the playlist |
 | `remove_from_playlist` | `index` | Remove the effect at the given playlist position |
 | `move_in_playlist` | `index`, `to_index` | Move a playlist item to a new position |
+| `clear_playlist` | — | Remove all items from the playlist |
 | `set_fade_in` | `value_ms` | Set fade-in duration |
 | `set_fade_out` | `value_ms` | Set fade-out duration |
 | `set_crossfade` | `value_ms` | Set crossfade duration |
@@ -555,16 +560,6 @@ Cross.toml               cross-compilation config — installs libasound2-dev:ar
 led-state.json           persisted UI state (created automatically on first run)
 ```
 
-## Roadmap / ideas
-
-### UI / usability
-- **Saved presets** — name and store a (effect + speed + brightness + duration) configuration to recall later
-- **Dimming schedule** — automatically dim or turn off at a configured time (e.g. midnight), useful for permanent installs
-- **Basic auth** — single username/password so the UI is not open to everyone on the local network
-
-### Effects
-- **Segmented effects** — run different effects on different sections of the strip simultaneously
-
 ## Transition behavior
 
 | Situation | Result |
@@ -578,3 +573,51 @@ led-state.json           persisted UI state (created automatically on first run)
 | Playlist reaches end | Wraps back to index 0 |
 | GPIO pin or pixel count changed | Current effect stops, hardware reinitializes, effect restarts with new settings |
 | SIGINT / SIGTERM received | Strip fades to black over 500 ms, then process exits cleanly |
+
+## Feature wishlist
+
+Ideas for future development, roughly grouped by theme.
+
+### Effect authoring
+- **In-browser Lua editor** — write and hot-reload effects from the UI without SSH
+- **Effect parameters** — Lua effects declare knobs/sliders via metadata; the UI renders them per-effect (e.g. `params = { speed = { min=0.1, max=5, default=1 } }`)
+- **Effect categories/tags** — group effects in the picker (ambient, audio, holiday, etc.)
+- **Favorites** — star effects to pin them to the top of the picker
+
+### Strip & hardware
+- **Segment support** — divide the strip into zones, each running an independent effect with its own color/palette
+- **Multiple strip support** — drive more than one GPIO output with separate configs
+- **LED matrix mode** — 2D layout so effects can use x/y coordinates
+- **Physical button support** — map GPIO buttons to play/pause/next/stop without opening the UI
+
+### Scheduling & automation
+- **Time-based scheduler** — run specific effects or playlists between set times
+- **Sunrise/sunset mode** — dim to warm white at dusk, off at a configurable hour
+- **Calendar events** — automatic holiday themes (Christmas, Halloween, etc.) by date range
+- **Alarm/flash timer** — flash strip at a scheduled time
+
+### Audio
+- **BPM display + tap tempo** — show detected BPM; allow manual tap-in to lock tempo
+- **Per-band gain** — EQ-style sliders to boost/cut sensitivity by frequency range
+- **Spectrum visualizer in UI** — live 16-band bar graph next to the VU meter
+- **Audio input gain control** — normalize loud vs. quiet sources without touching system mixer
+
+### Home automation integration
+- **MQTT support** — publish state, subscribe to commands (play, stop, select effect, brightness)
+- **Home Assistant integration** — expose as a light entity via MQTT discovery or native API
+- **REST API polish** — OpenAPI spec so other tools can integrate easily
+
+### Presets & persistence
+- **Named presets** — save the full current state (effect, color, palette, speed, brightness) under a name and recall it
+- **Multiple playlists** — save and switch between named playlists, not just the one active queue
+- **Import/export** — download/upload presets and playlists as JSON
+
+### UI / UX
+- **Simulated strip preview** — render the active effect in the browser as an SVG/canvas strip (no hardware needed for dev)
+- **PWA / installable** — add `manifest.json` so the page can be pinned to a phone home screen
+- **Keyboard shortcuts** — space = play/pause, arrow keys = next/prev, number keys = brightness steps
+- **Undo for playlist edits** — revert accidental removes or reorders
+
+### Sync & multi-device
+- **Multi-controller sync** — elect one Pi as master; others follow its effect and timestamp over UDP
+- **Art-Net / sACN** — output pixel data over DMX protocols so any lighting software can drive the strip
