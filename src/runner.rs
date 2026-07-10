@@ -124,6 +124,7 @@ fn default_gpio_pin()         -> i32    { 18 }
 fn default_num_pixels()       -> usize  { 60 }
 fn default_true()             -> bool   { true }
 fn default_palette_cycle_ms() -> u64    { 5000 }
+fn default_audio_gain()       -> f32    { 1.0  }
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct PersistentState {
@@ -141,6 +142,7 @@ pub struct PersistentState {
     #[serde(default = "default_num_pixels")]        pub num_pixels: usize,
     #[serde(default = "default_true")]              pub is_running: bool,
     #[serde(default = "default_palette_cycle_ms")]  pub palette_cycle_ms: u64,
+    #[serde(default = "default_audio_gain")]         pub audio_gain: f32,
 }
 
 impl PersistentState {
@@ -180,6 +182,7 @@ impl From<&SharedState> for PersistentState {
             num_pixels: s.num_pixels,
             is_running: s.is_running,
             palette_cycle_ms: s.palette_cycle_ms,
+            audio_gain: s.audio_gain,
         }
     }
 }
@@ -212,6 +215,7 @@ pub enum Command {
     SetGpioPin(i32),
     SetPalette(Vec<[u8; 3]>),
     SetPaletteCycleMs(u64),
+    SetAudioGain(f32),
     SetAudioDevice(Option<String>),
     RefreshAudioDevices,
 }
@@ -243,6 +247,7 @@ pub struct SharedState {
     pub audio_device: Option<String>,
     pub audio_amplitude: f32,
     pub audio_beat: f32,
+    pub audio_gain: f32,
 }
 
 // --------------------------------------------------------------------------
@@ -361,6 +366,7 @@ impl Runner {
             audio_device: None,
             audio_amplitude: 0.0,
             audio_beat: 0.0,
+            audio_gain: config.audio_analysis.load_gain(),
         }));
 
         let state_clone  = Arc::clone(&shared_state);
@@ -676,6 +682,11 @@ fn run_loop(
                 Command::RefreshAudioDevices => {
                     let devices = audio::list_input_devices();
                     if let Ok(mut s) = shared.lock() { s.audio_devices = devices; }
+                }
+                Command::SetAudioGain(g) => {
+                    let g = g.clamp(0.1, 10.0);
+                    config.audio_analysis.gain.store(g.to_bits(), Ordering::Relaxed);
+                    if let Ok(mut s) = shared.lock() { s.audio_gain = g; }
                 }
             }
         }

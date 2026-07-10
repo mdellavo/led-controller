@@ -552,6 +552,11 @@ const renderState = (state) => {
       paletteCycleSlider.value = state.palette_cycle_ms;
       paletteCycleVal.textContent = (state.palette_cycle_ms / 1000).toFixed(1) + 's per color';
     }
+    // audio gain slider
+    if (state.audio_gain != null) {
+      audioGainSlider.value = state.audio_gain;
+      audioGainVal.textContent = '×' + parseFloat(state.audio_gain).toFixed(2);
+    }
     // hardware settings
     colorOrderSelect.value = (state.color_order || 'rgb').toLowerCase();
     gammaSlider.value = state.gamma;
@@ -608,6 +613,17 @@ audioDeviceSel.addEventListener('change', () => {
 
 document.getElementById('btn-refresh-audio').addEventListener('click', () => {
   api('refresh_audio_devices');
+});
+
+const audioGainSlider = document.getElementById('audio-gain');
+const audioGainVal    = document.getElementById('audio-gain-val');
+audioGainSlider.addEventListener('input', () => {
+  const v = parseFloat(audioGainSlider.value);
+  audioGainVal.textContent = '×' + v.toFixed(2);
+  clearTimeout(fadeDebouncers['audio-gain']);
+  fadeDebouncers['audio-gain'] = setTimeout(
+    () => api('set_audio_gain', { value: v }), 150
+  );
 });
 
 const baseDeviceName = (name) => {

@@ -157,8 +157,9 @@ pub async fn post_command(
             Command::SetPalette(colors.into_iter().map(|c| [c.r, c.g, c.b]).collect())
         }),
         "set_palette_cycle_ms" => req.value_ms.map(Command::SetPaletteCycleMs),
-        "set_audio_device" => Some(Command::SetAudioDevice(req.effect)),
+        "set_audio_device"   => Some(Command::SetAudioDevice(req.effect)),
         "refresh_audio_devices" => Some(Command::RefreshAudioDevices),
+        "set_audio_gain"    => req.value.map(Command::SetAudioGain),
         _ => None,
     };
 

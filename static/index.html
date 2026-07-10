@@ -614,6 +614,11 @@
         <span id="audio-vu-label">Select a device to enable audio reactive effects</span>
         <span class="beat-dot" id="audio-beat-dot"></span>
       </div>
+      <div class="fade-field" style="margin-top:0.625rem">
+        <label>Input gain</label>
+        <input type="range" id="audio-gain" min="0.1" max="5" step="0.05" value="1">
+        <div class="fade-value" id="audio-gain-val">×1.00</div>
+      </div>
       <p class="hw-note" style="margin-top:0.625rem">Exposes <code>AUDIO_AMP</code>, <code>AUDIO_BEAT</code>, <code>AUDIO_BASS</code>, <code>AUDIO_MID</code>, <code>AUDIO_HIGH</code>, <code>AUDIO_SPECTRUM[16]</code> to Lua effects.</p>
     </div>
 

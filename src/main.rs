@@ -4,7 +4,7 @@ mod runner;
 mod api;
 mod audio;
 
-use std::sync::{Arc, RwLock, atomic::{AtomicU64}};
+use std::sync::{Arc, RwLock, atomic::{AtomicU64, Ordering}};
 
 use audio::AudioAnalysis;
 
@@ -165,6 +165,8 @@ async fn main() -> anyhow::Result<()> {
     // -----------------------------------------------------------------------
 
     let audio_analysis: Arc<AudioAnalysis> = Arc::new(AudioAnalysis::new());
+    let audio_gain_val = s.map(|s| s.audio_gain).unwrap_or(1.0);
+    audio_analysis.gain.store(audio_gain_val.to_bits(), Ordering::Relaxed);
     let initial_audio_devices = audio::list_input_devices();
 
     let effects_dir = args.effects_dir.clone();

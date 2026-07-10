@@ -16,6 +16,7 @@ pub struct AudioAnalysis {
     pub mid:       AtomicU32,         // f32 bits, 0.0–1.0  (200–4 kHz)
     pub high:      AtomicU32,         // f32 bits, 0.0–1.0  (4–20 kHz)
     pub spectrum:  RwLock<[f32; 16]>, // 16 log-spaced bands, 0.0–1.0
+    pub gain:      AtomicU32,         // f32 bits, post-normalization multiplier (default 1.0)
 }
 
 impl AudioAnalysis {
@@ -27,6 +28,7 @@ impl AudioAnalysis {
             mid:       AtomicU32::new(0),
             high:      AtomicU32::new(0),
             spectrum:  RwLock::new([0.0; 16]),
+            gain:      AtomicU32::new(1.0f32.to_bits()),
         }
     }
 
@@ -47,6 +49,7 @@ impl AudioAnalysis {
 
     pub fn load_amplitude(&self) -> f32 { f32::from_bits(self.amplitude.load(Ordering::Relaxed)) }
     pub fn load_beat(&self)      -> f32 { f32::from_bits(self.beat.load(Ordering::Relaxed)) }
+    pub fn load_gain(&self)      -> f32 { f32::from_bits(self.gain.load(Ordering::Relaxed)) }
 }
 
 // --------------------------------------------------------------------------
@@ -188,12 +191,14 @@ mod capture {
             }
             beat_env *= 0.88;
 
-            AudioAnalysis::store_f32(&analysis.amplitude, amp_smooth);
-            AudioAnalysis::store_f32(&analysis.beat,      beat_env);
-            AudioAnalysis::store_f32(&analysis.bass,      bass);
-            AudioAnalysis::store_f32(&analysis.mid,       mid);
-            AudioAnalysis::store_f32(&analysis.high,      high);
-            if let Ok(mut s) = analysis.spectrum.write() { *s = bands; }
+            let gain = f32::from_bits(analysis.gain.load(Ordering::Relaxed)).max(0.01);
+            AudioAnalysis::store_f32(&analysis.amplitude, (amp_smooth * gain).min(1.0));
+            AudioAnalysis::store_f32(&analysis.beat,      (beat_env  * gain).min(1.0));
+            AudioAnalysis::store_f32(&analysis.bass,      (bass      * gain).min(1.0));
+            AudioAnalysis::store_f32(&analysis.mid,       (mid       * gain).min(1.0));
+            AudioAnalysis::store_f32(&analysis.high,      (high      * gain).min(1.0));
+            let gained: [f32; 16] = bands.map(|b| (b * gain).min(1.0));
+            if let Ok(mut s) = analysis.spectrum.write() { *s = gained; }
         }
     }
 
