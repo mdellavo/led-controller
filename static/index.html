@@ -580,16 +580,6 @@
       </div>
     </div>
 
-    <!-- Color picker -->
-    <div class="card">
-      <div class="card-title">Color</div>
-      <div class="hw-row" style="margin-top:0">
-        <label>Effect color</label>
-        <input type="color" id="user-color" value="#ffffff">
-      </div>
-      <p class="hw-note">Applied to: Solid Color, Color Wipe, Running Lights, Strobe, Meteor Rain, Theatre Chase, Twinkle.</p>
-    </div>
-
     <!-- Palette -->
     <div class="card">
       <div class="card-title">Palette</div>
@@ -597,6 +587,11 @@
       <div class="hw-row" style="margin-top:0.625rem;align-items:center">
         <button id="palette-add" class="btn" style="flex:0">+ Add color</button>
         <span class="hw-note" style="margin:0;padding-left:0.5rem">Max 8. Available in Lua as <code>PALETTE[i]</code> and <code>PALETTE_SIZE</code>.</span>
+      </div>
+      <div class="fade-field" style="margin-top:0.875rem">
+        <label>Cycle speed (COLOR_R/G/B effects)</label>
+        <input type="range" id="palette-cycle" min="500" max="30000" step="500" value="5000">
+        <div class="fade-value" id="palette-cycle-val">5.0s per color</div>
       </div>
     </div>
 

@@ -1,5 +1,5 @@
 use std::sync::{
-    atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering},
+    atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering},
     Arc, Mutex, RwLock,
 };
 use std::thread::{self, JoinHandle};
@@ -115,14 +115,15 @@ impl RunnerState {
 // Persistent state — saved to disk and reloaded across restarts
 // --------------------------------------------------------------------------
 
-fn default_speed()       -> f32    { 1.0 }
-fn default_brightness()  -> f32    { 1.0 }
-fn default_gamma()       -> f32    { 2.2 }
-fn default_color_order() -> String { "rgb".to_string() }
-fn default_fade_ms()     -> u64    { 3000 }
-fn default_gpio_pin()    -> i32    { 18 }
-fn default_num_pixels()  -> usize  { 60 }
-fn default_true()        -> bool   { true }
+fn default_speed()            -> f32    { 1.0 }
+fn default_brightness()       -> f32    { 1.0 }
+fn default_gamma()            -> f32    { 2.2 }
+fn default_color_order()      -> String { "rgb".to_string() }
+fn default_fade_ms()          -> u64    { 3000 }
+fn default_gpio_pin()         -> i32    { 18 }
+fn default_num_pixels()       -> usize  { 60 }
+fn default_true()             -> bool   { true }
+fn default_palette_cycle_ms() -> u64    { 5000 }
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct PersistentState {
@@ -136,9 +137,10 @@ pub struct PersistentState {
     #[serde(default = "default_fade_ms")]      pub fade_out_ms: u64,
     #[serde(default = "default_fade_ms")]      pub crossfade_ms: u64,
     #[serde(default)]                          pub effect_duration_ms: u64,
-    #[serde(default = "default_gpio_pin")]     pub gpio_pin: i32,
-    #[serde(default = "default_num_pixels")]   pub num_pixels: usize,
-    #[serde(default = "default_true")]         pub is_running: bool,
+    #[serde(default = "default_gpio_pin")]          pub gpio_pin: i32,
+    #[serde(default = "default_num_pixels")]        pub num_pixels: usize,
+    #[serde(default = "default_true")]              pub is_running: bool,
+    #[serde(default = "default_palette_cycle_ms")]  pub palette_cycle_ms: u64,
 }
 
 impl PersistentState {
@@ -177,6 +179,7 @@ impl From<&SharedState> for PersistentState {
             gpio_pin: s.gpio_pin,
             num_pixels: s.num_pixels,
             is_running: s.is_running,
+            palette_cycle_ms: s.palette_cycle_ms,
         }
     }
 }
@@ -207,8 +210,8 @@ pub enum Command {
     SetColorOrder(String),
     SetNumPixels(usize),
     SetGpioPin(i32),
-    SetUserColor(u8, u8, u8),
     SetPalette(Vec<[u8; 3]>),
+    SetPaletteCycleMs(u64),
     SetAudioDevice(Option<String>),
     RefreshAudioDevices,
 }
@@ -234,7 +237,7 @@ pub struct SharedState {
     pub num_pixels: usize,
     pub gpio_pin: i32,
     pub color_order: String,
-    pub user_color: [u8; 3],
+    pub palette_cycle_ms: u64,
     pub palette: Vec<[u8; 3]>,
     pub audio_devices: Vec<String>,
     pub audio_device: Option<String>,
@@ -263,8 +266,8 @@ pub struct RunnerConfig {
     pub initial_playlist_index: usize,
     /// Where to persist state across restarts.
     pub state_file: Option<std::path::PathBuf>,
-    /// Shared atomic user color — written by SetUserColor, read by every LuaEffect VM.
-    pub user_color: Arc<[AtomicU8; 3]>,
+    /// Palette cycle period — how long each palette color is shown before advancing.
+    pub palette_cycle_ms: Arc<AtomicU64>,
     /// Shared palette — written by SetPalette, snapshotted by every LuaEffect VM each frame.
     pub palette: Arc<RwLock<Vec<[u8; 3]>>>,
     /// Shared audio analysis — written by the audio thread, read by every LuaEffect VM each frame.
@@ -281,7 +284,7 @@ impl Default for RunnerConfig {
             effect_duration_ms: 0, speed: 1.0, brightness: 1.0, gamma: 2.2,
             gpio_pin: 18, hw_brightness: 25, color_order: ColorOrder::default(),
             initial_playlist: None, initial_playlist_index: 0, state_file: None,
-            user_color: Arc::new([AtomicU8::new(255), AtomicU8::new(255), AtomicU8::new(255)]),
+            palette_cycle_ms: Arc::new(AtomicU64::new(5000)),
             palette: Arc::new(RwLock::new(Vec::new())),
             audio_analysis: Arc::new(AudioAnalysis::new()),
             initial_audio_devices: Vec::new(),
@@ -328,11 +331,6 @@ impl Runner {
         let initial_playlist_index = config.initial_playlist_index
             .min(initial_playlist.len().saturating_sub(1));
 
-        let initial_user_color = [
-            config.user_color[0].load(Ordering::Relaxed),
-            config.user_color[1].load(Ordering::Relaxed),
-            config.user_color[2].load(Ordering::Relaxed),
-        ];
         let initial_palette = config.palette.read()
             .map(|g| g.clone())
             .unwrap_or_default();
@@ -357,7 +355,7 @@ impl Runner {
             num_pixels,
             gpio_pin: config.gpio_pin,
             color_order: color_order_str,
-            user_color: initial_user_color,
+            palette_cycle_ms: config.palette_cycle_ms.load(Ordering::Relaxed),
             palette: initial_palette,
             audio_devices: initial_audio_devices,
             audio_device: None,
@@ -654,16 +652,15 @@ fn run_loop(
                         state = start_effect(std::mem::replace(&mut state, RunnerState::Idle), h, fade_in_dur, crossfade_dur);
                     }
                 }
-                Command::SetUserColor(r, g, b) => {
-                    config.user_color[0].store(r, Ordering::Relaxed);
-                    config.user_color[1].store(g, Ordering::Relaxed);
-                    config.user_color[2].store(b, Ordering::Relaxed);
-                    if let Ok(mut s) = shared.lock() { s.user_color = [r, g, b]; }
-                }
                 Command::SetPalette(colors) => {
                     let colors: Vec<[u8; 3]> = colors.into_iter().take(8).collect();
                     if let Ok(mut pal) = config.palette.write() { *pal = colors.clone(); }
                     if let Ok(mut s) = shared.lock() { s.palette = colors; }
+                }
+                Command::SetPaletteCycleMs(ms) => {
+                    let ms = ms.max(100);
+                    config.palette_cycle_ms.store(ms, Ordering::Relaxed);
+                    if let Ok(mut s) = shared.lock() { s.palette_cycle_ms = ms; }
                 }
                 Command::SetAudioDevice(device_name) => {
                     audio_handle = None; // drop old handle → stops capture thread

@@ -312,17 +312,6 @@ brightnessSlider.addEventListener('input', () => {
   fadeDebouncers['brightness'] = setTimeout(() => api('set_brightness', { value: v }), 150);
 });
 
-// Color picker
-const colorPicker = document.getElementById('user-color');
-colorPicker.addEventListener('input', () => {
-  const hex = colorPicker.value;
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  clearTimeout(fadeDebouncers['color']);
-  fadeDebouncers['color'] = setTimeout(() => api('set_color', { r, g, b }), 80);
-});
-
 // Palette
 const MAX_PALETTE = 8;
 let paletteColors = [];
@@ -379,6 +368,18 @@ document.getElementById('palette-add').addEventListener('click', () => {
     renderPalette();
     sendPalette();
   }
+});
+
+// Palette cycle speed slider
+const paletteCycleSlider = document.getElementById('palette-cycle');
+const paletteCycleVal    = document.getElementById('palette-cycle-val');
+paletteCycleSlider.addEventListener('input', () => {
+  const ms = parseInt(paletteCycleSlider.value);
+  paletteCycleVal.textContent = (ms / 1000).toFixed(1) + 's per color';
+  clearTimeout(fadeDebouncers['palette-cycle']);
+  fadeDebouncers['palette-cycle'] = setTimeout(
+    () => api('set_palette_cycle_ms', { value_ms: ms }), 300
+  );
 });
 
 // --------------------------------------------------------------------------
@@ -546,10 +547,10 @@ const renderState = (state) => {
     speedVal.textContent = parseFloat(state.speed).toFixed(1) + '×';
     brightnessSlider.value = state.brightness;
     brightnessVal.textContent = Math.round(parseFloat(state.brightness) * 100) + '%';
-    // color picker
-    if (state.user_color) {
-      const [cr, cg, cb] = state.user_color;
-      colorPicker.value = '#' + [cr, cg, cb].map(v => v.toString(16).padStart(2, '0')).join('');
+    // palette cycle slider
+    if (state.palette_cycle_ms != null) {
+      paletteCycleSlider.value = state.palette_cycle_ms;
+      paletteCycleVal.textContent = (state.palette_cycle_ms / 1000).toFixed(1) + 's per color';
     }
     // hardware settings
     colorOrderSelect.value = (state.color_order || 'rgb').toLowerCase();

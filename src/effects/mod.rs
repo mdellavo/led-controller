@@ -1,6 +1,6 @@
 use std::time::Duration;
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock, atomic::AtomicU8};
+use std::sync::{Arc, RwLock, atomic::AtomicU64};
 use crate::audio::AudioAnalysis;
 use crate::pixels::Color;
 
@@ -122,8 +122,8 @@ pub fn load_lua_effects(
     dir: &std::path::Path,
     num_pixels: usize,
     registry: &mut EffectRegistry,
-    user_color: Arc<[AtomicU8; 3]>,
     palette: Arc<RwLock<Vec<[u8; 3]>>>,
+    palette_cycle_ms: Arc<AtomicU64>,
     audio: Arc<AudioAnalysis>,
 ) {
     let entries = match std::fs::read_dir(dir) {
@@ -156,13 +156,13 @@ pub fn load_lua_effects(
             registry.set_description(static_name, desc);
         }
         registry.register(static_name, {
-            let src   = source.clone();
-            let color = Arc::clone(&user_color);
-            let pal   = Arc::clone(&palette);
-            let aud   = Arc::clone(&audio);
+            let src      = source.clone();
+            let pal      = Arc::clone(&palette);
+            let cycle_ms = Arc::clone(&palette_cycle_ms);
+            let aud      = Arc::clone(&audio);
             move || Box::new(lua_effect::LuaEffect::new(
                 static_name, src.clone(), num_pixels,
-                Arc::clone(&color), Arc::clone(&pal), Arc::clone(&aud),
+                Arc::clone(&pal), Arc::clone(&cycle_ms), Arc::clone(&aud),
             ))
         });
     }

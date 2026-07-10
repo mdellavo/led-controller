@@ -4,7 +4,7 @@ mod runner;
 mod api;
 mod audio;
 
-use std::sync::{Arc, RwLock, atomic::AtomicU8};
+use std::sync::{Arc, RwLock, atomic::{AtomicU64}};
 
 use audio::AudioAnalysis;
 
@@ -126,11 +126,8 @@ async fn main() -> anyhow::Result<()> {
     let initial_playlist       = s.map(|s| s.playlist.clone());
     let initial_playlist_index = s.map(|s| s.playlist_index).unwrap_or(0);
     let should_start           = s.map(|s| s.is_running).unwrap_or(true);
-    let user_color: Arc<[AtomicU8; 3]> = Arc::new([
-        AtomicU8::new(rand::random()),
-        AtomicU8::new(rand::random()),
-        AtomicU8::new(rand::random()),
-    ]);
+    let palette_cycle_ms_val   = s.map(|s| s.palette_cycle_ms).unwrap_or(5000);
+    let palette_cycle_ms: Arc<AtomicU64> = Arc::new(AtomicU64::new(palette_cycle_ms_val));
 
     // 5 evenly-spaced hues starting from a random offset on the color wheel.
     let palette_offset = rand::random::<u8>();
@@ -171,15 +168,15 @@ async fn main() -> anyhow::Result<()> {
     let initial_audio_devices = audio::list_input_devices();
 
     let effects_dir = args.effects_dir.clone();
-    let user_color_for_factory  = Arc::clone(&user_color);
-    let palette_for_factory     = Arc::clone(&palette);
-    let audio_for_factory       = Arc::clone(&audio_analysis);
+    let palette_for_factory       = Arc::clone(&palette);
+    let audio_for_factory         = Arc::clone(&audio_analysis);
+    let cycle_ms_for_factory      = Arc::clone(&palette_cycle_ms);
     let registry_factory: RegistryFactory = Arc::new(move |n: usize| {
         let mut r = default_registry(n);
         effects::load_lua_effects(
             &effects_dir, n, &mut r,
-            Arc::clone(&user_color_for_factory),
             Arc::clone(&palette_for_factory),
+            Arc::clone(&cycle_ms_for_factory),
             Arc::clone(&audio_for_factory),
         );
         r
@@ -193,8 +190,8 @@ async fn main() -> anyhow::Result<()> {
     let mut registry = default_registry(num_pixels);
     effects::load_lua_effects(
         &args.effects_dir, num_pixels, &mut registry,
-        Arc::clone(&user_color),
         Arc::clone(&palette),
+        Arc::clone(&palette_cycle_ms),
         Arc::clone(&audio_analysis),
     );
 
@@ -207,7 +204,7 @@ async fn main() -> anyhow::Result<()> {
         initial_playlist,
         initial_playlist_index,
         state_file: Some(args.state_file),
-        user_color,
+        palette_cycle_ms,
         palette,
         audio_analysis,
         initial_audio_devices,

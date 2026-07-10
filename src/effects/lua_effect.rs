@@ -1,5 +1,5 @@
-use std::sync::{Arc, RwLock, atomic::{AtomicU8, Ordering}};
-use std::time::Duration;
+use std::sync::{Arc, RwLock, atomic::{AtomicU64, Ordering}};
+use std::time::{Duration, SystemTime};
 
 use mlua::prelude::*;
 
@@ -93,8 +93,8 @@ impl LuaUserData for LuaBuf {
 pub struct LuaEffect {
     name: &'static str,
     lua: Lua,
-    user_color: Arc<[AtomicU8; 3]>,
     palette: Arc<RwLock<Vec<[u8; 3]>>>,
+    palette_cycle_ms: Arc<AtomicU64>,
     audio: Arc<AudioAnalysis>,
 }
 
@@ -103,8 +103,8 @@ impl LuaEffect {
         name: &'static str,
         source: String,
         num_pixels: usize,
-        user_color: Arc<[AtomicU8; 3]>,
         palette: Arc<RwLock<Vec<[u8; 3]>>>,
+        palette_cycle_ms: Arc<AtomicU64>,
         audio: Arc<AudioAnalysis>,
     ) -> Self {
         let lua = Lua::new();
@@ -132,7 +132,7 @@ impl LuaEffect {
             }
         }
 
-        Self { name, lua, user_color, palette, audio }
+        Self { name, lua, palette, palette_cycle_ms, audio }
     }
 
     /// Run the script in a throw-away VM to read its `name` and `description` globals.
@@ -160,18 +160,28 @@ impl Effect for LuaEffect {
     fn update(&mut self, buffer: &mut Buffer, delta: Duration) -> bool {
         let dt = delta.as_secs_f32();
 
-        // Inject user color globals so Lua effects can read COLOR_R/G/B.
-        let r = self.user_color[0].load(Ordering::Relaxed);
-        let g = self.user_color[1].load(Ordering::Relaxed);
-        let b = self.user_color[2].load(Ordering::Relaxed);
-        let _ = self.lua.globals().set("COLOR_R", r as u32);
-        let _ = self.lua.globals().set("COLOR_G", g as u32);
-        let _ = self.lua.globals().set("COLOR_B", b as u32);
-
-        // Inject palette globals: PALETTE (1-indexed table of {r,g,b}) and PALETTE_SIZE.
+        // Snapshot palette once — used for both COLOR_R/G/B cycling and PALETTE table.
         let palette_snap: Vec<[u8; 3]> = self.palette.read()
             .map(|g| g.clone())
             .unwrap_or_default();
+
+        // Inject COLOR_R/G/B by walking the palette at the configured cycle rate.
+        let [cr, cg, cb] = if palette_snap.is_empty() {
+            [255u8, 255u8, 255u8]
+        } else if palette_snap.len() == 1 {
+            palette_snap[0]
+        } else {
+            let cycle_ms = self.palette_cycle_ms.load(Ordering::Relaxed).max(1);
+            let elapsed_ms = SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as u64;
+            let idx = ((elapsed_ms / cycle_ms) % palette_snap.len() as u64) as usize;
+            palette_snap[idx]
+        };
+        let _ = self.lua.globals().set("COLOR_R", cr as u32);
+        let _ = self.lua.globals().set("COLOR_G", cg as u32);
+        let _ = self.lua.globals().set("COLOR_B", cb as u32);
         if let Ok(pal_table) = self.lua.create_table() {
             for (i, &[pr, pg, pb]) in palette_snap.iter().enumerate() {
                 if let Ok(entry) = self.lua.create_table() {

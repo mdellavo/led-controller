@@ -114,9 +114,6 @@ pub struct CommandRequest {
     pub value: Option<f32>,
     pub index: Option<usize>,
     pub to_index: Option<usize>,
-    pub r: Option<u8>,
-    pub g: Option<u8>,
-    pub b: Option<u8>,
     pub palette: Option<Vec<PaletteColor>>,
 }
 
@@ -156,13 +153,10 @@ pub async fn post_command(
         "set_color_order" => req.effect.clone().map(Command::SetColorOrder),
         "set_num_pixels"  => req.value_ms.map(|n| Command::SetNumPixels(n as usize)),
         "set_gpio_pin"    => req.value_ms.map(|p| Command::SetGpioPin(p as i32)),
-        "set_color" => match (req.r, req.g, req.b) {
-            (Some(r), Some(g), Some(b)) => Some(Command::SetUserColor(r, g, b)),
-            _ => None,
-        },
         "set_palette" => req.palette.map(|colors| {
             Command::SetPalette(colors.into_iter().map(|c| [c.r, c.g, c.b]).collect())
         }),
+        "set_palette_cycle_ms" => req.value_ms.map(Command::SetPaletteCycleMs),
         "set_audio_device" => Some(Command::SetAudioDevice(req.effect)),
         "refresh_audio_devices" => Some(Command::RefreshAudioDevices),
         _ => None,
