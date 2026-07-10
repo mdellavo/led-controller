@@ -585,8 +585,19 @@ const renderState = (state) => {
     currentAudioDevice = serverActive;
   }
 
-  // Audio levels — update VU meter every state push
-  renderAudioLevels(state.audio_amplitude, state.audio_beat);
+  // Audio levels, spectrum, BPM — update every state push
+  renderAudioLevels(state.audio_amplitude, state.audio_beat, state.audio_bpm, state.audio_bpm_locked);
+  renderSpectrum(state.audio_spectrum);
+
+  // EQ sliders — sync from server on first load and when band gains change
+  if (!lastState && state.audio_band_gains) {
+    state.audio_band_gains.forEach((g, i) => {
+      if (i < eqSliders.length) {
+        eqSliders[i].value = g;
+        eqVals[i].textContent = '×' + parseFloat(g).toFixed(2);
+      }
+    });
+  }
 };
 
 const syncSlider = (id, valId, ms) => {
@@ -673,14 +684,101 @@ const renderAudioDevices = (devices, active) => {
   audioDeviceSel.value = active || prev || '';
 };
 
-const renderAudioLevels = (amp, beat) => {
+const renderAudioLevels = (amp, beat, bpm, locked) => {
   vuBar.style.width = `${Math.round((amp || 0) * 100)}%`;
   const b = beat || 0;
   beatDot.classList.toggle('active', b > 0.5);
+  const bpmEl = document.getElementById('audio-bpm');
   if (currentAudioDevice) {
     vuLabel.textContent = `Amp: ${Math.round((amp || 0) * 100)}%  Beat: ${b > 0.5 ? '●' : '○'}`;
+    if (bpm && bpm > 0) {
+      bpmEl.textContent = Math.round(bpm) + ' BPM' + (locked ? ' 🔒' : '');
+    } else {
+      bpmEl.textContent = '— BPM';
+    }
   } else {
     vuLabel.textContent = 'Select a device to enable audio reactive effects';
+    bpmEl.textContent = '';
   }
 };
+
+// Spectrum bars — built once, updated each state push
+const spectrumBarsEl = document.getElementById('spectrum-bars');
+const spectrumBars = [];
+for (let i = 0; i < 16; i++) {
+  const bar = document.createElement('div');
+  bar.className = 'spectrum-bar';
+  bar.style.height = '2px';
+  spectrumBarsEl.appendChild(bar);
+  spectrumBars.push(bar);
+}
+
+const renderSpectrum = (spectrum) => {
+  spectrumBars.forEach((bar, i) => {
+    const pct = Math.round((spectrum && spectrum[i] || 0) * 100);
+    bar.style.height = Math.max(pct, 2) + '%';
+  });
+};
+
+// EQ band labels (short, for 16 log-spaced bands 20 Hz–20 kHz)
+const EQ_LABELS = ['20Hz','40Hz','80Hz','160Hz','300Hz','500Hz','1kHz','2kHz',
+                   '3kHz','4kHz','6kHz','8kHz','10kHz','12kHz','14kHz','16kHz'];
+
+const eqGrid = document.getElementById('eq-grid');
+const eqSliders = [];
+const eqVals = [];
+EQ_LABELS.forEach((label, i) => {
+  const band = document.createElement('div');
+  band.className = 'eq-band';
+
+  const lbl = document.createElement('label');
+  lbl.textContent = label;
+
+  const row = document.createElement('div');
+  row.className = 'eq-band-row';
+
+  const slider = document.createElement('input');
+  slider.type = 'range';
+  slider.min = '0';
+  slider.max = '4';
+  slider.step = '0.05';
+  slider.value = '1';
+
+  const val = document.createElement('span');
+  val.className = 'eq-band-val';
+  val.textContent = '×1.00';
+
+  slider.addEventListener('input', () => {
+    const g = parseFloat(slider.value);
+    val.textContent = '×' + g.toFixed(2);
+    clearTimeout(fadeDebouncers[`band-${i}`]);
+    fadeDebouncers[`band-${i}`] = setTimeout(
+      () => api('set_band_gain', { index: i, value: g }), 150
+    );
+  });
+
+  row.appendChild(slider);
+  row.appendChild(val);
+  band.appendChild(lbl);
+  band.appendChild(row);
+  eqGrid.appendChild(band);
+  eqSliders.push(slider);
+  eqVals.push(val);
+});
+
+document.getElementById('btn-reset-eq').addEventListener('click', () => {
+  eqSliders.forEach((s, i) => {
+    s.value = '1';
+    eqVals[i].textContent = '×1.00';
+    api('set_band_gain', { index: i, value: 1.0 });
+  });
+});
+
+// Tap tempo
+document.getElementById('btn-tap-tempo').addEventListener('click', () => {
+  api('tap_tempo');
+});
+document.getElementById('btn-clear-tap').addEventListener('click', () => {
+  api('clear_tap_tempo');
+});
 

@@ -123,8 +123,9 @@ fn default_fade_ms()          -> u64    { 3000 }
 fn default_gpio_pin()         -> i32    { 18 }
 fn default_num_pixels()       -> usize  { 60 }
 fn default_true()             -> bool   { true }
-fn default_palette_cycle_ms() -> u64    { 5000 }
-fn default_audio_gain()       -> f32    { 1.0  }
+fn default_palette_cycle_ms() -> u64       { 5000 }
+fn default_audio_gain()       -> f32       { 1.0  }
+fn default_band_gains()       -> Vec<f32>  { vec![1.0; 16] }
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct PersistentState {
@@ -143,6 +144,7 @@ pub struct PersistentState {
     #[serde(default = "default_true")]              pub is_running: bool,
     #[serde(default = "default_palette_cycle_ms")]  pub palette_cycle_ms: u64,
     #[serde(default = "default_audio_gain")]         pub audio_gain: f32,
+    #[serde(default = "default_band_gains")]         pub audio_band_gains: Vec<f32>,
 }
 
 impl PersistentState {
@@ -183,6 +185,7 @@ impl From<&SharedState> for PersistentState {
             is_running: s.is_running,
             palette_cycle_ms: s.palette_cycle_ms,
             audio_gain: s.audio_gain,
+            audio_band_gains: s.audio_band_gains.clone(),
         }
     }
 }
@@ -218,6 +221,9 @@ pub enum Command {
     SetAudioGain(f32),
     SetAudioDevice(Option<String>),
     RefreshAudioDevices,
+    TapTempo,
+    ClearTapTempo,
+    SetBandGain(usize, f32),
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -248,6 +254,10 @@ pub struct SharedState {
     pub audio_amplitude: f32,
     pub audio_beat: f32,
     pub audio_gain: f32,
+    pub audio_bpm: f32,
+    pub audio_bpm_locked: bool,
+    pub audio_spectrum: Vec<f32>,
+    pub audio_band_gains: Vec<f32>,
 }
 
 // --------------------------------------------------------------------------
@@ -367,6 +377,13 @@ impl Runner {
             audio_amplitude: 0.0,
             audio_beat: 0.0,
             audio_gain: config.audio_analysis.load_gain(),
+            audio_bpm: 0.0,
+            audio_bpm_locked: false,
+            audio_spectrum: vec![0.0; 16],
+            audio_band_gains: config.audio_analysis.band_gains
+                .iter()
+                .map(|a| f32::from_bits(a.load(Ordering::Relaxed)))
+                .collect(),
         }));
 
         let state_clone  = Arc::clone(&shared_state);
@@ -455,6 +472,7 @@ fn run_loop(
     let hw_brightness   = config.hw_brightness;
     let mut audio_handle: Option<AudioHandle> = None;
     let mut audio_tick: u32 = 0;
+    let mut tap_times: Vec<Instant> = Vec::new();
 
     let mut black = vec![[0u8; 3]; num_pixels];
     let mut state = RunnerState::Idle;
@@ -688,21 +706,62 @@ fn run_loop(
                     config.audio_analysis.gain.store(g.to_bits(), Ordering::Relaxed);
                     if let Ok(mut s) = shared.lock() { s.audio_gain = g; }
                 }
+                Command::TapTempo => {
+                    let now = Instant::now();
+                    if let Some(&last) = tap_times.last() {
+                        if now.duration_since(last).as_secs_f32() > 3.0 {
+                            tap_times.clear();
+                        }
+                    }
+                    tap_times.push(now);
+                    if tap_times.len() >= 3 {
+                        let oldest = tap_times[0];
+                        let span = now.duration_since(oldest).as_secs_f32();
+                        let bpm = (60.0 * (tap_times.len() - 1) as f32 / span).clamp(30.0, 300.0);
+                        config.audio_analysis.locked_bpm.store(bpm.to_bits(), Ordering::Relaxed);
+                        if let Ok(mut s) = shared.lock() {
+                            s.audio_bpm = bpm;
+                            s.audio_bpm_locked = true;
+                        }
+                    }
+                }
+                Command::ClearTapTempo => {
+                    tap_times.clear();
+                    config.audio_analysis.locked_bpm.store(0u32, Ordering::Relaxed);
+                    if let Ok(mut s) = shared.lock() { s.audio_bpm_locked = false; }
+                }
+                Command::SetBandGain(idx, gain) => {
+                    if idx < 16 {
+                        let gain = gain.clamp(0.0, 4.0);
+                        config.audio_analysis.band_gains[idx].store(gain.to_bits(), Ordering::Relaxed);
+                        if let Ok(mut s) = shared.lock() {
+                            if s.audio_band_gains.len() > idx {
+                                s.audio_band_gains[idx] = gain;
+                            }
+                        }
+                    }
+                }
             }
         }
 
-        // Sync audio levels into SharedState every ~6 frames (100 ms) for VU meter.
+        // Sync audio levels into SharedState every ~6 frames (100 ms) for VU meter + spectrum viz.
         audio_tick += 1;
         if audio_handle.is_some() && audio_tick >= 6 {
             audio_tick = 0;
-            let amp  = config.audio_analysis.load_amplitude();
-            let beat = config.audio_analysis.load_beat();
+            let amp      = config.audio_analysis.load_amplitude();
+            let beat     = config.audio_analysis.load_beat();
+            let bpm      = config.audio_analysis.load_bpm();
+            let locked   = f32::from_bits(config.audio_analysis.locked_bpm.load(Ordering::Relaxed)) > 0.0;
+            let spectrum = config.audio_analysis.spectrum.read()
+                .map(|s| s.to_vec())
+                .unwrap_or_else(|_| vec![0.0; 16]);
             if let Ok(mut s) = shared.lock() {
-                let changed = (s.audio_amplitude - amp).abs() > 0.005
-                    || (s.audio_beat - beat).abs() > 0.01;
-                s.audio_amplitude = amp;
-                s.audio_beat      = beat;
-                if changed { dirty = true; }
+                s.audio_amplitude  = amp;
+                s.audio_beat       = beat;
+                s.audio_bpm        = bpm;
+                s.audio_bpm_locked = locked;
+                s.audio_spectrum   = spectrum;
+                dirty = true; // spectrum changes every frame; always push at ~10 fps when audio active
             }
         }
 

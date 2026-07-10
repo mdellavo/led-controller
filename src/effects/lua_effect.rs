@@ -202,6 +202,7 @@ impl Effect for LuaEffect {
         let _ = self.lua.globals().set("AUDIO_BASS", f32::from_bits(self.audio.bass.load(Ordering::Relaxed)));
         let _ = self.lua.globals().set("AUDIO_MID",  f32::from_bits(self.audio.mid.load(Ordering::Relaxed)));
         let _ = self.lua.globals().set("AUDIO_HIGH", f32::from_bits(self.audio.high.load(Ordering::Relaxed)));
+        let _ = self.lua.globals().set("AUDIO_BPM",  self.audio.load_bpm());
         if let Ok(spectrum) = self.audio.spectrum.read() {
             if let Ok(table) = self.lua.create_table() {
                 for (i, &v) in spectrum.iter().enumerate() {

@@ -160,6 +160,12 @@ pub async fn post_command(
         "set_audio_device"   => Some(Command::SetAudioDevice(req.effect)),
         "refresh_audio_devices" => Some(Command::RefreshAudioDevices),
         "set_audio_gain"    => req.value.map(Command::SetAudioGain),
+        "tap_tempo"         => Some(Command::TapTempo),
+        "clear_tap_tempo"   => Some(Command::ClearTapTempo),
+        "set_band_gain"     => match (req.index, req.value) {
+            (Some(idx), Some(gain)) => Some(Command::SetBandGain(idx, gain)),
+            _ => None,
+        },
         _ => None,
     };
 

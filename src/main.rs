@@ -167,6 +167,10 @@ async fn main() -> anyhow::Result<()> {
     let audio_analysis: Arc<AudioAnalysis> = Arc::new(AudioAnalysis::new());
     let audio_gain_val = s.map(|s| s.audio_gain).unwrap_or(1.0);
     audio_analysis.gain.store(audio_gain_val.to_bits(), Ordering::Relaxed);
+    let band_gains = s.map(|s| s.audio_band_gains.clone()).unwrap_or_else(|| vec![1.0; 16]);
+    for (i, &g) in band_gains.iter().enumerate().take(16) {
+        audio_analysis.band_gains[i].store(g.to_bits(), Ordering::Relaxed);
+    }
     let initial_audio_devices = audio::list_input_devices();
 
     let effects_dir = args.effects_dir.clone();

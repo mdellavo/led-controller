@@ -10,31 +10,38 @@ use std::thread::JoinHandle;
 // --------------------------------------------------------------------------
 
 pub struct AudioAnalysis {
-    pub amplitude: AtomicU32,         // f32 bits, 0.0–1.0  (smoothed RMS)
-    pub beat:      AtomicU32,         // f32 bits, 0.0–1.0  (decaying envelope)
-    pub bass:      AtomicU32,         // f32 bits, 0.0–1.0  (20–200 Hz)
-    pub mid:       AtomicU32,         // f32 bits, 0.0–1.0  (200–4 kHz)
-    pub high:      AtomicU32,         // f32 bits, 0.0–1.0  (4–20 kHz)
-    pub spectrum:  RwLock<[f32; 16]>, // 16 log-spaced bands, 0.0–1.0
-    pub gain:      AtomicU32,         // f32 bits, post-normalization multiplier (default 1.0)
+    pub amplitude:  AtomicU32,         // f32 bits, 0.0–1.0  (smoothed RMS)
+    pub beat:       AtomicU32,         // f32 bits, 0.0–1.0  (decaying envelope)
+    pub bass:       AtomicU32,         // f32 bits, 0.0–1.0  (20–200 Hz)
+    pub mid:        AtomicU32,         // f32 bits, 0.0–1.0  (200–4 kHz)
+    pub high:       AtomicU32,         // f32 bits, 0.0–1.0  (4–20 kHz)
+    pub spectrum:   RwLock<[f32; 16]>, // 16 log-spaced bands, 0.0–1.0
+    pub gain:       AtomicU32,         // f32 bits, post-normalization multiplier (default 1.0)
+    pub bpm:        AtomicU32,         // f32 bits, detected/locked BPM (0 = unknown)
+    pub locked_bpm: AtomicU32,         // f32 bits, tap-locked BPM (0 = auto-detect)
+    pub band_gains: [AtomicU32; 16],   // f32 bits, per-band gain multipliers (default 1.0)
 }
 
 impl AudioAnalysis {
     pub fn new() -> Self {
         Self {
-            amplitude: AtomicU32::new(0),
-            beat:      AtomicU32::new(0),
-            bass:      AtomicU32::new(0),
-            mid:       AtomicU32::new(0),
-            high:      AtomicU32::new(0),
-            spectrum:  RwLock::new([0.0; 16]),
-            gain:      AtomicU32::new(1.0f32.to_bits()),
+            amplitude:  AtomicU32::new(0),
+            beat:       AtomicU32::new(0),
+            bass:       AtomicU32::new(0),
+            mid:        AtomicU32::new(0),
+            high:       AtomicU32::new(0),
+            spectrum:   RwLock::new([0.0; 16]),
+            gain:       AtomicU32::new(1.0f32.to_bits()),
+            bpm:        AtomicU32::new(0),
+            locked_bpm: AtomicU32::new(0),
+            band_gains: std::array::from_fn(|_| AtomicU32::new(1.0f32.to_bits())),
         }
     }
 
-    /// Reset all values to zero (called when audio is stopped).
+    /// Reset all transient values to zero (called when audio is stopped).
+    /// Preserves user preferences: gain, locked_bpm, band_gains.
     pub fn zero(&self) {
-        for a in [&self.amplitude, &self.beat, &self.bass, &self.mid, &self.high] {
+        for a in [&self.amplitude, &self.beat, &self.bass, &self.mid, &self.high, &self.bpm] {
             a.store(0, Ordering::Relaxed);
         }
         if let Ok(mut s) = self.spectrum.write() {
@@ -50,6 +57,7 @@ impl AudioAnalysis {
     pub fn load_amplitude(&self) -> f32 { f32::from_bits(self.amplitude.load(Ordering::Relaxed)) }
     pub fn load_beat(&self)      -> f32 { f32::from_bits(self.beat.load(Ordering::Relaxed)) }
     pub fn load_gain(&self)      -> f32 { f32::from_bits(self.gain.load(Ordering::Relaxed)) }
+    pub fn load_bpm(&self)       -> f32 { f32::from_bits(self.bpm.load(Ordering::Relaxed)) }
 }
 
 // --------------------------------------------------------------------------
@@ -138,6 +146,8 @@ mod capture {
         let mut energy_history: VecDeque<f32> = VecDeque::with_capacity(HISTORY);
         let mut beat_env  = 0.0f32;
         let mut last_beat = Instant::now();
+        let mut beat_times: VecDeque<Instant> = VecDeque::with_capacity(16);
+        let mut locked_beat_last = Instant::now();
 
         while !stop.load(Ordering::Relaxed) {
             thread::sleep(Duration::from_millis(10));
@@ -171,7 +181,8 @@ mod capture {
             for (i, &(lo, hi)) in BANDS.iter().enumerate() {
                 let e = band_rms(&mags, lo, hi, sample_rate);
                 band_peaks[i] = (band_peaks[i] * 0.9998).max(e).max(1e-9);
-                bands[i] = (e / band_peaks[i]).min(1.0);
+                let band_gain = f32::from_bits(analysis.band_gains[i].load(Ordering::Relaxed)).max(0.0);
+                bands[i] = (e / band_peaks[i] * band_gain).min(1.0);
             }
 
             let bass = (bands[0] + bands[1] + bands[2] + bands[3]) / 4.0;
@@ -182,14 +193,40 @@ mod capture {
             energy_history.push_back(bass_raw * bass_raw);
             if energy_history.len() > HISTORY { energy_history.pop_front(); }
             let mean = energy_history.iter().sum::<f32>() / energy_history.len() as f32;
-            let is_beat = bass_raw * bass_raw > 1.4 * mean
-                && mean > 1e-12
-                && last_beat.elapsed() >= Duration::from_millis(150);
-            if is_beat {
-                beat_env  = 1.0;
-                last_beat = Instant::now();
-            }
+
+            let locked_bpm_val = f32::from_bits(analysis.locked_bpm.load(Ordering::Relaxed));
+            let is_beat = if locked_bpm_val > 0.0 {
+                let interval = Duration::from_secs_f32(60.0 / locked_bpm_val);
+                if locked_beat_last.elapsed() >= interval {
+                    locked_beat_last = Instant::now();
+                    true
+                } else {
+                    false
+                }
+            } else {
+                let fired = bass_raw * bass_raw > 1.4 * mean
+                    && mean > 1e-12
+                    && last_beat.elapsed() >= Duration::from_millis(150);
+                if fired {
+                    beat_times.push_back(Instant::now());
+                    if beat_times.len() > 16 { beat_times.pop_front(); }
+                    last_beat = Instant::now();
+                }
+                fired
+            };
+            if is_beat { beat_env = 1.0; }
             beat_env *= 0.88;
+
+            let bpm = if locked_bpm_val > 0.0 {
+                locked_bpm_val
+            } else if beat_times.len() >= 2 {
+                let oldest = *beat_times.front().unwrap();
+                let newest = *beat_times.back().unwrap();
+                let span = newest.duration_since(oldest).as_secs_f32();
+                if span > 0.01 { 60.0 * (beat_times.len() - 1) as f32 / span } else { 0.0 }
+            } else {
+                0.0
+            };
 
             let gain = f32::from_bits(analysis.gain.load(Ordering::Relaxed)).max(0.01);
             AudioAnalysis::store_f32(&analysis.amplitude, (amp_smooth * gain).min(1.0));
@@ -197,6 +234,7 @@ mod capture {
             AudioAnalysis::store_f32(&analysis.bass,      (bass      * gain).min(1.0));
             AudioAnalysis::store_f32(&analysis.mid,       (mid       * gain).min(1.0));
             AudioAnalysis::store_f32(&analysis.high,      (high      * gain).min(1.0));
+            AudioAnalysis::store_f32(&analysis.bpm,       bpm);
             let gained: [f32; 16] = bands.map(|b| (b * gain).min(1.0));
             if let Ok(mut s) = analysis.spectrum.write() { *s = gained; }
         }
