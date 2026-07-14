@@ -548,6 +548,17 @@
     }
     .effect-option:hover .effect-option-preview { opacity: 1; }
     .effect-option-preview:hover { color: var(--accent); border-color: var(--accent); }
+    .effect-option-star {
+      background: none; border: none; cursor: pointer; padding: 0 0.3rem;
+      font-size: 1rem; color: var(--text-dim); line-height: 1; flex-shrink: 0;
+      opacity: 0.3; transition: opacity 0.15s, color 0.15s;
+    }
+    .effect-option-star.fav { color: #f5c518; opacity: 1; }
+    .effect-option:hover .effect-option-star { opacity: 0.8; }
+    .picker-section-label {
+      font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--text-dim); padding: 0.4rem 0.75rem 0.2rem; pointer-events: none;
+    }
 
     /* Strip preview */
     .strip-preview {

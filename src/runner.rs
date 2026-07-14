@@ -126,6 +126,7 @@ fn default_true()             -> bool   { true }
 fn default_palette_cycle_ms() -> u64       { 5000 }
 fn default_audio_gain()       -> f32       { 1.0  }
 fn default_band_gains()       -> Vec<f32>  { vec![1.0; 16] }
+fn default_favorites()        -> Vec<String> { vec![] }
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct PersistentState {
@@ -145,6 +146,7 @@ pub struct PersistentState {
     #[serde(default = "default_palette_cycle_ms")]  pub palette_cycle_ms: u64,
     #[serde(default = "default_audio_gain")]         pub audio_gain: f32,
     #[serde(default = "default_band_gains")]         pub audio_band_gains: Vec<f32>,
+    #[serde(default = "default_favorites")]          pub favorites: Vec<String>,
 }
 
 impl PersistentState {
@@ -186,6 +188,7 @@ impl From<&SharedState> for PersistentState {
             palette_cycle_ms: s.palette_cycle_ms,
             audio_gain: s.audio_gain,
             audio_band_gains: s.audio_band_gains.clone(),
+            favorites: s.favorites.clone(),
         }
     }
 }
@@ -224,6 +227,7 @@ pub enum Command {
     TapTempo,
     ClearTapTempo,
     SetBandGain(usize, f32),
+    ToggleFavorite(String),
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -259,6 +263,7 @@ pub struct SharedState {
     pub audio_spectrum: Vec<f32>,
     pub audio_band_gains: Vec<f32>,
     pub pixel_data: Vec<[u8; 3]>,
+    pub favorites: Vec<String>,
 }
 
 // --------------------------------------------------------------------------
@@ -290,6 +295,8 @@ pub struct RunnerConfig {
     pub audio_analysis: Arc<AudioAnalysis>,
     /// Pre-populated audio device list for the initial SharedState.
     pub initial_audio_devices: Vec<String>,
+    /// Favorites list loaded from saved state.
+    pub initial_favorites: Vec<String>,
 }
 
 impl Default for RunnerConfig {
@@ -304,6 +311,7 @@ impl Default for RunnerConfig {
             palette: Arc::new(RwLock::new(Vec::new())),
             audio_analysis: Arc::new(AudioAnalysis::new()),
             initial_audio_devices: Vec::new(),
+            initial_favorites: Vec::new(),
         }
     }
 }
@@ -386,6 +394,7 @@ impl Runner {
                 .map(|a| f32::from_bits(a.load(Ordering::Relaxed)))
                 .collect(),
             pixel_data: vec![[0u8; 3]; num_pixels],
+            favorites: config.initial_favorites.clone(),
         }));
 
         let state_clone  = Arc::clone(&shared_state);
@@ -742,6 +751,16 @@ fn run_loop(
                                 s.audio_band_gains[idx] = gain;
                             }
                         }
+                    }
+                }
+                Command::ToggleFavorite(name) => {
+                    if let Ok(mut s) = shared.lock() {
+                        if let Some(pos) = s.favorites.iter().position(|f| f == &name) {
+                            s.favorites.remove(pos);
+                        } else {
+                            s.favorites.push(name);
+                        }
+                        dirty = true;
                     }
                 }
             }

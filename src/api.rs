@@ -201,6 +201,7 @@ pub async fn post_command(
             (Some(idx), Some(gain)) => Some(Command::SetBandGain(idx, gain)),
             _ => None,
         },
+        "toggle_favorite"   => req.effect.clone().map(Command::ToggleFavorite),
         _ => None,
     };
 

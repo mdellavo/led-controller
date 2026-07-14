@@ -201,6 +201,8 @@ async fn main() -> anyhow::Result<()> {
         Arc::clone(&audio_analysis),
     );
 
+    let initial_favorites = s.map(|s| s.favorites.clone()).unwrap_or_default();
+
     let config = RunnerConfig {
         fade_in_ms, fade_out_ms, crossfade_ms,
         effect_duration_ms: effect_dur,
@@ -214,6 +216,7 @@ async fn main() -> anyhow::Result<()> {
         palette,
         audio_analysis,
         initial_audio_devices,
+        initial_favorites,
     };
 
     let runner = Runner::new(pixels, registry, config, pixel_factory, registry_factory);

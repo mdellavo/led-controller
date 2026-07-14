@@ -105,6 +105,7 @@ const effectLabel = (name) => EFFECT_ICONS[name] ? `${EFFECT_ICONS[name]} ${name
 
 let selectedEffect = null;
 let allEffectOptions = []; // [{ name, label, desc }, ...]
+let currentFavorites = new Set();
 
 const pickerTrigger = document.getElementById('effect-picker-trigger');
 const pickerPanel   = document.getElementById('effect-picker-panel');
@@ -128,58 +129,91 @@ const closePicker = () => {
 const renderPickerList = (filter) => {
   const q = filter.trim().toLowerCase();
   pickerList.innerHTML = '';
-  allEffectOptions
-    .filter(({ label, name, desc }) =>
-      !q || name.toLowerCase().includes(q) || label.toLowerCase().includes(q) || (desc || '').toLowerCase().includes(q)
-    )
-    .forEach(({ name, label, desc }) => {
-      const el = document.createElement('div');
-      el.className = 'effect-option' + (name === selectedEffect ? ' active' : '');
-      el.dataset.name = name;
 
-      const textWrap = document.createElement('div');
-      textWrap.className = 'effect-option-text';
-      const nameEl = document.createElement('div');
-      nameEl.className = 'effect-option-name';
-      nameEl.textContent = label;
-      textWrap.appendChild(nameEl);
-      if (desc) {
-        const descEl = document.createElement('div');
-        descEl.className = 'effect-option-desc';
-        descEl.textContent = desc;
-        textWrap.appendChild(descEl);
-      }
+  const matches = allEffectOptions.filter(({ name, label, desc }) =>
+    !q || name.toLowerCase().includes(q) || label.toLowerCase().includes(q) || (desc || '').toLowerCase().includes(q)
+  );
+  const favMatches  = matches.filter(o => currentFavorites.has(o.name));
+  const restMatches = matches.filter(o => !currentFavorites.has(o.name));
 
-      const previewBtn = document.createElement('button');
-      previewBtn.className = 'effect-option-preview';
-      previewBtn.textContent = '▶';
-      previewBtn.title = 'Preview on strip';
+  const buildRow = ({ name, label, desc }) => {
+    const el = document.createElement('div');
+    el.className = 'effect-option' + (name === selectedEffect ? ' active' : '');
+    el.dataset.name = name;
 
-      el.appendChild(textWrap);
-      el.appendChild(previewBtn);
+    const textWrap = document.createElement('div');
+    textWrap.className = 'effect-option-text';
+    const nameEl = document.createElement('div');
+    nameEl.className = 'effect-option-name';
+    nameEl.textContent = label;
+    textWrap.appendChild(nameEl);
+    if (desc) {
+      const descEl = document.createElement('div');
+      descEl.className = 'effect-option-desc';
+      descEl.textContent = desc;
+      textWrap.appendChild(descEl);
+    }
 
-      el.addEventListener('mousedown', (e) => {
-        if (e.target === previewBtn) return;
-        e.preventDefault();
-        selectedEffect = name;
-        pickerLabel.textContent = label;
-        closePicker();
-      });
+    const previewBtn = document.createElement('button');
+    previewBtn.className = 'effect-option-preview';
+    previewBtn.textContent = '▶';
+    previewBtn.title = 'Preview on strip';
 
-      previewBtn.addEventListener('mousedown', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        selectedEffect = name;
-        pickerLabel.textContent = label;
-        api('select', { effect: name });
-        // Keep picker open so user can continue browsing
-        pickerList.querySelectorAll('.effect-option').forEach(row => {
-          row.classList.toggle('active', row.dataset.name === name);
-        });
-      });
+    const isFav = currentFavorites.has(name);
+    const starBtn = document.createElement('button');
+    starBtn.className = 'effect-option-star' + (isFav ? ' fav' : '');
+    starBtn.textContent = '★';
+    starBtn.title = isFav ? 'Remove from favorites' : 'Add to favorites';
 
-      pickerList.appendChild(el);
+    el.appendChild(textWrap);
+    el.appendChild(previewBtn);
+    el.appendChild(starBtn);
+
+    el.addEventListener('mousedown', (e) => {
+      if (e.target === previewBtn || e.target === starBtn) return;
+      e.preventDefault();
+      selectedEffect = name;
+      pickerLabel.textContent = label;
+      closePicker();
     });
+
+    previewBtn.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      selectedEffect = name;
+      pickerLabel.textContent = label;
+      api('select', { effect: name });
+      // Keep picker open so user can continue browsing
+      pickerList.querySelectorAll('.effect-option').forEach(row => {
+        row.classList.toggle('active', row.dataset.name === name);
+      });
+    });
+
+    starBtn.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      api('toggle_favorite', { effect: name });
+    });
+
+    return el;
+  };
+
+  const appendSection = (sectionLabel, items) => {
+    if (sectionLabel) {
+      const hdr = document.createElement('div');
+      hdr.className = 'picker-section-label';
+      hdr.textContent = sectionLabel;
+      pickerList.appendChild(hdr);
+    }
+    items.forEach(o => pickerList.appendChild(buildRow(o)));
+  };
+
+  if (favMatches.length > 0) {
+    appendSection('Favorites', favMatches);
+    appendSection('All Effects', restMatches);
+  } else {
+    appendSection(null, restMatches);
+  }
 };
 
 pickerTrigger.addEventListener('click', () => {
@@ -520,6 +554,15 @@ const renderState = (state) => {
   fpsEl.textContent = state.fps ? `${Math.round(state.fps)} fps` : '';
 
   // Populate effect picker + playlist-add-select (once, or when effect list changes)
+  // Sync favorites — re-render picker if membership changed
+  const newFavSet = new Set(state.favorites || []);
+  const favsChanged = newFavSet.size !== currentFavorites.size ||
+    [...newFavSet].some(f => !currentFavorites.has(f));
+  if (favsChanged) {
+    currentFavorites = newFavSet;
+    if (!pickerPanel.hidden) renderPickerList(pickerSearch.value);
+  }
+
   if (!lastState || lastState.effects.length !== state.effects.length) {
     const sorted = [...state.effects].sort((a, b) => a.localeCompare(b));
     const descs  = state.effect_descriptions || {};
