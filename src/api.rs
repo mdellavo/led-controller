@@ -40,6 +40,41 @@ pub async fn app_js() -> Response {
         .into_response()
 }
 
+pub async fn manifest() -> Response {
+    (
+        [(header::CONTENT_TYPE, "application/manifest+json")],
+        include_str!("../static/manifest.json"),
+    )
+        .into_response()
+}
+
+pub async fn icon_svg() -> Response {
+    (
+        [(header::CONTENT_TYPE, "image/svg+xml")],
+        include_str!("../static/icon.svg"),
+    )
+        .into_response()
+}
+
+pub async fn icon_maskable_svg() -> Response {
+    (
+        [(header::CONTENT_TYPE, "image/svg+xml")],
+        include_str!("../static/icon-maskable.svg"),
+    )
+        .into_response()
+}
+
+pub async fn sw_js() -> Response {
+    (
+        [
+            (header::CONTENT_TYPE, "application/javascript"),
+            (header::CACHE_CONTROL, "no-store"),
+        ],
+        include_str!("../static/sw.js"),
+    )
+        .into_response()
+}
+
 // --------------------------------------------------------------------------
 // Route: GET /ws  — WebSocket push of SharedState on every change
 // --------------------------------------------------------------------------

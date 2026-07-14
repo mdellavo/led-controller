@@ -853,3 +853,8 @@ document.getElementById('btn-clear-tap').addEventListener('click', () => {
   api('clear_tap_tempo');
 });
 
+// PWA service worker registration
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+}
+
