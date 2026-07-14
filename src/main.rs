@@ -202,6 +202,7 @@ async fn main() -> anyhow::Result<()> {
     );
 
     let initial_favorites = s.map(|s| s.favorites.clone()).unwrap_or_default();
+    let initial_composite_layers = s.map(|s| s.composite_layers.clone()).unwrap_or_default();
 
     let config = RunnerConfig {
         fade_in_ms, fade_out_ms, crossfade_ms,
@@ -217,6 +218,7 @@ async fn main() -> anyhow::Result<()> {
         audio_analysis,
         initial_audio_devices,
         initial_favorites,
+        initial_composite_layers,
     };
 
     let runner = Runner::new(pixels, registry, config, pixel_factory, registry_factory);

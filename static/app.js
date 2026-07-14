@@ -228,6 +228,100 @@ document.addEventListener('pointerdown', (e) => {
   }
 });
 
+// --------------------------------------------------------------------------
+// Composite layers
+// --------------------------------------------------------------------------
+
+const layersList = document.getElementById('layers-list');
+const BLEND_MODES = ['add', 'mix', 'screen', 'multiply'];
+const BLEND_LABELS = { add: 'Add', mix: 'Mix', screen: 'Screen', multiply: 'Multiply' };
+
+const buildEffectSelect = (selectedName, onChange) => {
+  const sel = document.createElement('select');
+  sel.className = 'layer-effect-select';
+  allEffectOptions.forEach(({ name, label }) => {
+    const opt = document.createElement('option');
+    opt.value = name;
+    opt.textContent = label;
+    opt.selected = name === selectedName;
+    sel.appendChild(opt);
+  });
+  sel.addEventListener('change', () => onChange(sel.value));
+  return sel;
+};
+
+const renderLayers = (layers) => {
+  layersList.innerHTML = '';
+  if (!layers || layers.length === 0) {
+    const hint = document.createElement('div');
+    hint.className = 'no-layers-hint';
+    hint.textContent = 'No layers — primary effect runs alone.';
+    layersList.appendChild(hint);
+    return;
+  }
+  layers.forEach((layer, idx) => {
+    const row = document.createElement('div');
+    row.className = 'layer-row';
+
+    const effectSel = buildEffectSelect(layer.effect_name, (name) => {
+      api('update_composite_layer', { index: idx, value: layer.opacity, blend_mode: layer.blend_mode, effect: name });
+    });
+
+    // Blend mode select
+    const blendSel = document.createElement('select');
+    blendSel.className = 'layer-blend-select';
+    BLEND_MODES.forEach(mode => {
+      const opt = document.createElement('option');
+      opt.value = mode;
+      opt.textContent = BLEND_LABELS[mode];
+      opt.selected = mode === (layer.blend_mode || 'add');
+      blendSel.appendChild(opt);
+    });
+    blendSel.addEventListener('change', () => {
+      api('update_composite_layer', { index: idx, value: layer.opacity, blend_mode: blendSel.value });
+    });
+
+    // Opacity slider
+    const opSlider = document.createElement('input');
+    opSlider.type = 'range';
+    opSlider.className = 'layer-opacity-range';
+    opSlider.min = 0; opSlider.max = 1; opSlider.step = 0.01;
+    opSlider.value = layer.opacity ?? 1;
+
+    const opVal = document.createElement('span');
+    opVal.className = 'layer-opacity-val';
+    opVal.textContent = Math.round((layer.opacity ?? 1) * 100) + '%';
+
+    opSlider.addEventListener('input', () => {
+      const v = parseFloat(opSlider.value);
+      opVal.textContent = Math.round(v * 100) + '%';
+      clearTimeout(opSlider._t);
+      opSlider._t = setTimeout(() => {
+        api('update_composite_layer', { index: idx, value: v, blend_mode: blendSel.value });
+      }, 120);
+    });
+
+    // Remove button
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'layer-remove';
+    removeBtn.textContent = '✕';
+    removeBtn.title = 'Remove layer';
+    removeBtn.addEventListener('click', () => api('remove_composite_layer', { index: idx }));
+
+    row.appendChild(effectSel);
+    row.appendChild(blendSel);
+    row.appendChild(opSlider);
+    row.appendChild(opVal);
+    row.appendChild(removeBtn);
+    layersList.appendChild(row);
+  });
+};
+
+document.getElementById('btn-add-layer').addEventListener('click', () => {
+  const firstName = allEffectOptions.length > 0 ? allEffectOptions[0].name : null;
+  if (firstName) api('add_composite_layer', { effect: firstName, value: 1.0, blend_mode: 'add' });
+});
+
 const api = async (action, extra = {}) => {
   try {
     const res = await fetch('/api/command', {
@@ -659,6 +753,9 @@ const renderState = (state) => {
     stripCanvas._lastPixels = state.pixel_data;
     renderStrip(state.pixel_data);
   }
+
+  // Composite layers
+  renderLayers(state.composite_layers || []);
 
   // Audio levels, spectrum, BPM — update every state push
   renderAudioLevels(state.audio_amplitude, state.audio_beat, state.audio_bpm, state.audio_bpm_locked);

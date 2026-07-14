@@ -124,9 +124,19 @@ fn default_gpio_pin()         -> i32    { 18 }
 fn default_num_pixels()       -> usize  { 60 }
 fn default_true()             -> bool   { true }
 fn default_palette_cycle_ms() -> u64       { 5000 }
-fn default_audio_gain()       -> f32       { 1.0  }
-fn default_band_gains()       -> Vec<f32>  { vec![1.0; 16] }
-fn default_favorites()        -> Vec<String> { vec![] }
+fn default_audio_gain()          -> f32                  { 1.0  }
+fn default_band_gains()          -> Vec<f32>              { vec![1.0; 16] }
+fn default_favorites()           -> Vec<String>           { vec![] }
+fn default_opacity()             -> f32                   { 1.0 }
+fn default_blend_add()           -> String                { "add".to_string() }
+fn default_composite_layers()    -> Vec<CompositeLayer>   { vec![] }
+
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub struct CompositeLayer {
+    pub effect_name: String,
+    #[serde(default = "default_opacity")]   pub opacity: f32,
+    #[serde(default = "default_blend_add")] pub blend_mode: String,
+}
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct PersistentState {
@@ -147,6 +157,7 @@ pub struct PersistentState {
     #[serde(default = "default_audio_gain")]         pub audio_gain: f32,
     #[serde(default = "default_band_gains")]         pub audio_band_gains: Vec<f32>,
     #[serde(default = "default_favorites")]          pub favorites: Vec<String>,
+    #[serde(default = "default_composite_layers")]   pub composite_layers: Vec<CompositeLayer>,
 }
 
 impl PersistentState {
@@ -189,6 +200,7 @@ impl From<&SharedState> for PersistentState {
             audio_gain: s.audio_gain,
             audio_band_gains: s.audio_band_gains.clone(),
             favorites: s.favorites.clone(),
+            composite_layers: s.composite_layers.clone(),
         }
     }
 }
@@ -228,6 +240,10 @@ pub enum Command {
     ClearTapTempo,
     SetBandGain(usize, f32),
     ToggleFavorite(String),
+    AddCompositeLayer(CompositeLayer),
+    RemoveCompositeLayer(usize),
+    UpdateCompositeLayer { index: usize, opacity: f32, blend_mode: String, effect_name: Option<String> },
+    ClearCompositeLayers,
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -264,6 +280,7 @@ pub struct SharedState {
     pub audio_band_gains: Vec<f32>,
     pub pixel_data: Vec<[u8; 3]>,
     pub favorites: Vec<String>,
+    pub composite_layers: Vec<CompositeLayer>,
 }
 
 // --------------------------------------------------------------------------
@@ -297,6 +314,8 @@ pub struct RunnerConfig {
     pub initial_audio_devices: Vec<String>,
     /// Favorites list loaded from saved state.
     pub initial_favorites: Vec<String>,
+    /// Composite layers loaded from saved state.
+    pub initial_composite_layers: Vec<CompositeLayer>,
 }
 
 impl Default for RunnerConfig {
@@ -312,6 +331,7 @@ impl Default for RunnerConfig {
             audio_analysis: Arc::new(AudioAnalysis::new()),
             initial_audio_devices: Vec::new(),
             initial_favorites: Vec::new(),
+            initial_composite_layers: Vec::new(),
         }
     }
 }
@@ -395,6 +415,7 @@ impl Runner {
                 .collect(),
             pixel_data: vec![[0u8; 3]; num_pixels],
             favorites: config.initial_favorites.clone(),
+            composite_layers: config.initial_composite_layers.clone(),
         }));
 
         let state_clone  = Arc::clone(&shared_state);
@@ -485,6 +506,11 @@ fn run_loop(
     let mut audio_tick: u32 = 0;
     let mut pixel_tick: u32 = 0;
     let mut tap_times: Vec<Instant> = Vec::new();
+    let mut composite_handles: Vec<(EffectHandle, CompositeLayer)> = config.initial_composite_layers
+        .iter()
+        .filter_map(|l| registry.create(&l.effect_name)
+            .map(|e| (EffectHandle::spawn(e, num_pixels, Arc::clone(&speed)), l.clone())))
+        .collect();
 
     let mut black = vec![[0u8; 3]; num_pixels];
     let mut state = RunnerState::Idle;
@@ -566,6 +592,10 @@ fn run_loop(
                     registry = registry_factory(n);
                     playlist.retain(|name| registry.contains(name));
                     playlist_index = 0;
+                    composite_handles = composite_handles.drain(..)
+                        .filter_map(|(_, layer)| registry.create(&layer.effect_name)
+                            .map(|e| (EffectHandle::spawn(e, n, Arc::clone(&speed)), layer)))
+                        .collect();
                     tracing::info!(num_pixels = n, "pixel count changed, restarting");
                     if let Ok(mut st) = shared.lock() {
                         st.num_pixels = n;
@@ -582,6 +612,10 @@ fn run_loop(
                     gpio_pin = pin;
                     state = RunnerState::Idle;
                     pixels = pixel_factory(gpio_pin, num_pixels, hw_brightness);
+                    composite_handles = composite_handles.drain(..)
+                        .filter_map(|(_, layer)| registry.create(&layer.effect_name)
+                            .map(|e| (EffectHandle::spawn(e, num_pixels, Arc::clone(&speed)), layer)))
+                        .collect();
                     tracing::info!(gpio_pin = pin, "GPIO pin changed, reinitializing hardware");
                     if let Ok(mut st) = shared.lock() { st.gpio_pin = pin; }
                     if let Some(h) = do_spawn(&playlist, playlist_index, &registry, num_pixels, Arc::clone(&speed)) {
@@ -763,6 +797,48 @@ fn run_loop(
                         dirty = true;
                     }
                 }
+                Command::AddCompositeLayer(layer) => {
+                    if let Some(effect) = registry.create(&layer.effect_name) {
+                        let handle = EffectHandle::spawn(effect, num_pixels, Arc::clone(&speed));
+                        composite_handles.push((handle, layer.clone()));
+                        if let Ok(mut s) = shared.lock() { s.composite_layers.push(layer); dirty = true; }
+                    }
+                }
+                Command::RemoveCompositeLayer(idx) => {
+                    if idx < composite_handles.len() {
+                        composite_handles.remove(idx);
+                        if let Ok(mut s) = shared.lock() { s.composite_layers.remove(idx); dirty = true; }
+                    }
+                }
+                Command::UpdateCompositeLayer { index, opacity, blend_mode, effect_name } => {
+                    if index < composite_handles.len() {
+                        // Respawn thread if effect changed
+                        if let Some(new_name) = &effect_name {
+                            if new_name != &composite_handles[index].1.effect_name {
+                                if let Some(effect) = registry.create(new_name) {
+                                    let new_handle = EffectHandle::spawn(effect, num_pixels, Arc::clone(&speed));
+                                    composite_handles[index].0 = new_handle;
+                                    composite_handles[index].1.effect_name = new_name.clone();
+                                }
+                            }
+                        }
+                        let layer = &mut composite_handles[index].1;
+                        layer.opacity = opacity.clamp(0.0, 1.0);
+                        layer.blend_mode = blend_mode.clone();
+                        if let Ok(mut s) = shared.lock() {
+                            if let Some(l) = s.composite_layers.get_mut(index) {
+                                l.effect_name = layer.effect_name.clone();
+                                l.opacity = layer.opacity;
+                                l.blend_mode = blend_mode;
+                            }
+                            dirty = true;
+                        }
+                    }
+                }
+                Command::ClearCompositeLayers => {
+                    composite_handles.clear();
+                    if let Ok(mut s) = shared.lock() { s.composite_layers.clear(); dirty = true; }
+                }
             }
         }
 
@@ -792,7 +868,7 @@ fn run_loop(
         // --- advance state machine and compute output ---
         let dt = FRAME_DURATION.as_secs_f32();
 
-        let (output, next_state) = match std::mem::replace(&mut state, RunnerState::Idle) {
+        let (mut output, next_state) = match std::mem::replace(&mut state, RunnerState::Idle) {
             RunnerState::Idle => (black.clone(), RunnerState::Idle),
 
             RunnerState::FadingIn { handle, alpha, duration } => {
@@ -836,6 +912,24 @@ fn run_loop(
         };
 
         state = next_state;
+
+        // --- composite layers: blend additional effect buffers onto primary output ---
+        for (handle, layer) in &composite_handles {
+            let layer_buf = handle.read_buffer();
+            let opacity = layer.opacity.clamp(0.0, 1.0);
+            for (dst, src) in output.iter_mut().zip(layer_buf.iter()) {
+                for (d, s) in dst.iter_mut().zip(src.iter()) {
+                    let b = *d as f32;
+                    let l = *s as f32;
+                    *d = match layer.blend_mode.as_str() {
+                        "mix"      => (b + (l - b) * opacity) as u8,
+                        "screen"   => { let sc = 255.0 - (255.0-b)*(255.0-l)/255.0; (b + (sc-b)*opacity) as u8 }
+                        "multiply" => { let m = b*l/255.0; (b + (m-b)*opacity) as u8 }
+                        _          => (b + l * opacity).min(255.0) as u8, // "add"
+                    };
+                }
+            }
+        }
 
         // --- auto-advance when effect duration expires ---
         if effect_duration > 0.0 && effect_elapsed >= effect_duration && matches!(state, RunnerState::Running { .. }) {

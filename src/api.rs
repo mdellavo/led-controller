@@ -150,6 +150,7 @@ pub struct CommandRequest {
     pub index: Option<usize>,
     pub to_index: Option<usize>,
     pub palette: Option<Vec<PaletteColor>>,
+    pub blend_mode: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -202,6 +203,21 @@ pub async fn post_command(
             _ => None,
         },
         "toggle_favorite"   => req.effect.clone().map(Command::ToggleFavorite),
+        "add_composite_layer" => req.effect.clone().map(|name| Command::AddCompositeLayer(
+            crate::runner::CompositeLayer {
+                effect_name: name,
+                opacity: req.value.unwrap_or(1.0).clamp(0.0, 1.0),
+                blend_mode: req.blend_mode.clone().unwrap_or_else(|| "add".into()),
+            }
+        )),
+        "remove_composite_layer" => req.index.map(Command::RemoveCompositeLayer),
+        "update_composite_layer" => req.index.map(|i| Command::UpdateCompositeLayer {
+            index: i,
+            opacity: req.value.unwrap_or(1.0),
+            blend_mode: req.blend_mode.clone().unwrap_or_else(|| "add".into()),
+            effect_name: req.effect.clone(),
+        }),
+        "clear_composite_layers" => Some(Command::ClearCompositeLayers),
         _ => None,
     };
 

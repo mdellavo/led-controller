@@ -560,6 +560,28 @@
       color: var(--text-dim); padding: 0.4rem 0.75rem 0.2rem; pointer-events: none;
     }
 
+    /* Composite layers */
+    .layer-row {
+      display: flex; align-items: center; gap: 0.5rem;
+      padding: 0.35rem 0; border-bottom: 1px solid var(--border);
+    }
+    .layer-row:last-of-type { border-bottom: none; }
+    .layer-effect-select { flex: 1; min-width: 0; }
+    .layer-blend-select  { flex: 0 0 5.5rem; }
+    .layer-opacity-range { flex: 0 0 4.5rem; }
+    .layer-opacity-val   { flex: 0 0 2.6rem; text-align: right; color: var(--text-dim); font-size: 0.8rem; }
+    .layer-remove {
+      background: none; border: 1px solid var(--border); border-radius: 6px;
+      color: var(--text-dim); cursor: pointer; padding: 0.2rem 0.45rem;
+      font-size: 0.8rem; flex-shrink: 0; line-height: 1.4;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .layer-remove:hover { color: #f87171; border-color: #f87171; }
+    .no-layers-hint {
+      color: var(--text-dim); font-size: 0.85rem; font-style: italic;
+      padding: 0.4rem 0; text-align: center;
+    }
+
     /* Strip preview */
     .strip-preview {
       background: var(--surface);
@@ -631,6 +653,13 @@
     <div class="strip-preview">
       <div class="strip-preview-label">Strip Preview</div>
       <canvas id="strip-canvas"></canvas>
+    </div>
+
+    <!-- Composite Layers -->
+    <div class="card">
+      <div class="card-title">Composite Layers</div>
+      <div id="layers-list"></div>
+      <button class="btn-secondary" id="btn-add-layer" style="margin-top:0.5rem;width:100%">+ Add Layer</button>
     </div>
 
     <!-- Effect selector -->
