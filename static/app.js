@@ -664,7 +664,7 @@ const renderStrip = (pixels) => {
   const n = pixels.length;
   const pw = w / n;
   for (let i = 0; i < n; i++) {
-    const [r, g, b] = pixels[i];
+    const [r, g, b] = pixels[n - 1 - i];
     stripCtx.fillStyle = `rgb(${r},${g},${b})`;
     // ceil+1 avoids hairline gaps at fractional pixel widths
     stripCtx.fillRect(Math.floor(i * pw), 0, Math.ceil(pw) + 1, h);
