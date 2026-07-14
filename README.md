@@ -1,34 +1,52 @@
 # LED Controller
 
-A Rust web server for controlling WS2812B LED strips (NeoPixels) on a Raspberry Pi. Effects are written in Lua and hot-loaded at startup, transitions between effects are crossfaded, and everything is controllable from a browser.
+A Rust web server for controlling WS2812B LED strips (NeoPixels) on a Raspberry Pi. Effects are written in Lua and hot-loaded at startup, transitions between effects are crossfaded, and everything is controllable from a browser — including on a phone pinned to the home screen.
 
 ## Features
 
 - Web control panel: start, stop, next, rich effect picker with live search and per-effect descriptions, playlist management
+- **96 effects** — all written in Lua, loaded from the `effects/` directory at startup
+- Lua effect system — add or edit effects without recompiling; any `.lua` file in `effects/` is registered automatically
 - Smooth transitions: fade in on start, fade out on stop, crossfade when switching effects — each with a configurable duration (default 3 s)
 - Sub-pixel antialiasing on all moving effects — point sources split brightness between adjacent LEDs for smooth, flicker-free motion
 - Frame-rate independent animation — all effects scale by delta time, stable at any CPU load or speed setting
 - Gamma correction — perceptual brightness LUT applied at hardware write (configurable exponent, default 2.2)
 - Auto-advance: configurable per-effect play time before moving to the next playlist entry
 - Full playlist management: add, remove, drag-to-reorder, shuffle; drag works on both desktop and mobile touch
-- **96 effects** — all written in Lua, loaded from the `effects/` directory at startup
-- Lua effect system — add or edit effects without recompiling; any `.lua` file in `effects/` is registered automatically
 - Per-effect descriptions shown in the effect picker — each effect file declares a `description` string
 - Status box shows current effect name, play timer (updated every second), and achieved FPS (updated every 5 s)
 - Graceful shutdown — SIGINT/SIGTERM triggers a 500 ms fade to black before exiting
-- Persistent state — playlist, speed, brightness, gamma, color order, and all durations are saved to `led-state.json` and restored on restart
+- Persistent state — playlist, speed, brightness, gamma, color order, all durations, palette, and audio settings saved to `led-state.json` and restored on restart
 - Hardware settings configurable live from the web UI: GPIO pin, pixel count, color order, gamma
 - WebSocket push — UI updates within one frame (~16 ms) on any state change; reconnects automatically
 - Mobile-friendly UI — 44 px touch targets, pointer-event drag-to-reorder, always-visible controls on touch devices
 - `NullPixels` dev mode (no hardware required) with debug logging
 - Single binary deployment — Lua VM is vendored; no runtime dependencies on the target beyond the binary and the `effects/` directory
-- **Audio reactive** — capture from any system input device; exposes amplitude, beat envelope, bass/mid/high bands, and a 16-band spectrum to every Lua effect
+- **Color palette cycling** — up to 8 swatches cycle at a configurable rate (0.5 s – 30 s per color); available to Lua as `COLOR_R/G/B` and `PALETTE[i]`
+- **Audio reactive** — capture from any system input device; exposes amplitude, beat envelope, bass/mid/high bands, a 16-band spectrum, and detected BPM to every Lua effect
+- **Audio input gain** — post-normalization multiplier to match sensitivity without touching the system mixer
+- **BPM detection + tap tempo** — rolling inter-beat average shown in the UI; manual tap locks the beat clock to a precise tempo; exposed as `AUDIO_BPM` in Lua
+- **Per-band EQ** — 16 independent gain sliders (one per frequency band, 20 Hz – 16 kHz) to boost or cut specific ranges
+- **Real-time spectrum visualizer** — 16-band bar graph updates at ~10 fps in the Audio Input card
+- **Simulated strip preview** — canvas element shows pixel colors at ~15 fps in the browser (works without hardware)
+- **PWA / installable** — `manifest.json` + pass-through service worker; "Add to Home Screen" on Android and iOS
 
 ## Changelog
 
 **Current**
+- Simulated strip preview: full-width canvas renders pixel colors at ~15 fps between the Controls and Effect Selector cards, driven by WebSocket pixel data (no hardware required to see effects)
+- Effect picker preview buttons: each row gets a `▶` button (visible on hover) that plays the effect immediately without closing the picker, so you can browse effects and see them live on the canvas strip
+- PWA support: `manifest.json`, SVG icons, pass-through service worker; Android/Chrome shows an install prompt and iOS supports Add to Home Screen
+- BPM detection from rolling inter-beat intervals; exposed as `AUDIO_BPM` Lua global and `audio_bpm` in WebSocket state
+- Tap tempo: clicking Tap ≥ 3 times locks the beat clock; ✕ clears it; locked BPM drives beat generation directly in the audio thread
+- Per-band EQ: 16 independent gain sliders (20 Hz – 16 kHz) in a new Audio EQ card; applied after per-band normalization, persisted across restarts
+- Spectrum visualizer: 16-bar gradient strip in the Audio Input card, pushed via WebSocket at ~10 fps
+- Audio input gain control: post-normalization multiplier slider (×0.1–×5.0), persisted
+
+**v0.6**
 - Rich custom effect picker replaces the native select — each option shows the effect name on one line and the full description on a second dimmed line; a live search/filter field narrows the list
 - ALSA audio device names cleaned up in the dropdown — `CARD=` name is extracted, ambiguous duplicates are disambiguated with a type suffix (hw, plug, sysdefault, etc.)
+- Color palette cycling — single `COLOR_R/G/B` selector replaced by palette cycle speed slider; `COLOR_R/G/B` now steps through palette colors at the configured rate, synchronized across all Lua VMs
 
 **v0.5**
 - 12 additional audio reactive effects (96 total): Beat Bounce, Beat Confetti, Beat Comet, Spectrum Waterfall, Frequency Comets, Harmonic Rings, Audio Fire, Audio Twinkle, Crowd Surf, Bass Treble Split, Audio Plasma, Spectrum Snake
@@ -44,27 +62,16 @@ A Rust web server for controlling WS2812B LED strips (NeoPixels) on a Raspberry 
 **v0.3**
 - 81 effects, all running as Lua scripts loaded from `effects/` at startup
 - Lua effect system: hot-load effects without recompiling; each file exports `name`, `description`, `init(n)`, and `update(buf, dt)`
-- Custom color picker in the web UI — choose a color applied to Solid Color, Color Wipe, Running Lights, Strobe, Meteor Rain, Theatre Chase, and Twinkle without editing code; color randomized on each start
 - Per-effect color palette — up to 8 swatches configurable in the web UI; available as `PALETTE[i]` and `PALETTE_SIZE` in every Lua effect; initialized to 5 evenly-spaced random hues on startup
 - Status box: live play timer (resets on effect change) and FPS counter
 - Graceful shutdown: SIGINT/SIGTERM fades the strip to black over 500 ms before the process exits
-- Emoji icons for all 81 effects in the web UI
 
 **v0.2**
-- Periodic FPS log every 5 seconds at `info` level showing actual achieved frame rate
-- Speed slider range extended to 10×
 - WebSocket push replaces 500 ms polling — UI updates within one frame on any state change, with auto-reconnect
-- Mobile-friendly UI — 44 px touch targets, pointer-event drag-to-reorder (works on touchscreens), always-visible remove buttons on touch devices
+- Mobile-friendly UI — 44 px touch targets, pointer-event drag-to-reorder, always-visible remove buttons on touch devices
 - Persist UI state (playlist, speed, brightness, gamma, color order, durations) across restarts via `led-state.json`
 - GPIO pin, pixel count, color order, and gamma configurable live from the web UI
-- Sub-pixel antialiasing on moving effects (Chase, Cylon, KITT, Meteor, Bouncing Balls) — point sources split brightness between adjacent LEDs
-- Frame-rate independent decay — trail fades scale by delta time, stable at any speed setting
-- Gamma correction LUT applied at hardware write (default 2.2, configurable)
-- Software brightness slider (0–100%)
-- Effect speed slider (0.1×–10.0×)
-- Chase effect randomises colour on each lap
-- Playlist loops back to index 0 at end
-- Color channel order configurable via `--color-order` flag and web UI
+- Sub-pixel antialiasing on moving effects; frame-rate-independent trail decay; gamma correction LUT
 
 **v0.1**
 - Axum web server with REST API
@@ -261,25 +268,26 @@ All settings (except `--brightness`, `--port`, and `--state-file`) can also be c
 
 UI state is saved to `led-state.json` (or the path given by `--state-file`) whenever it changes. On restart the saved values are loaded automatically. The file is plain JSON and can be edited by hand.
 
-What is persisted: playlist order and position, speed, software brightness, gamma, color order, all fade/transition durations, effect duration, GPIO pin, pixel count, and whether the strip was running.
+What is persisted: playlist order and position, speed, software brightness, gamma, color order, all fade/transition durations, effect duration, GPIO pin, pixel count, whether the strip was running, palette colors and cycle speed, audio device, audio input gain, and per-band EQ gains.
 
 Explicit CLI flags always override saved values for that session, but subsequent web UI changes will be saved over them.
 
 ## Web UI
 
-Open `http://<pi-ip>:3000` in a browser.
+Open `http://<pi-ip>:3000` in a browser. On Android/Chrome an install prompt appears; on iOS use Share → Add to Home Screen.
 
 | Section | Controls |
 |---|---|
 | **Status** | Coloured dot (green = running, amber = transitioning, grey = stopped) + current effect name + play timer + FPS |
 | **Controls** | Start, Next, Stop |
-| **Select Effect** | Custom dropdown picker — click to open a searchable list where each option shows the effect name on one line and its full description on a second dimmed line. Type to filter by name or description. **Play** jumps to the selected effect immediately. |
-| **Playlist** | Ordered list of effects to cycle through. Drag `⠿` to reorder, click `✕` to remove, click effect name to play it. Dropdown + **Add** to append any effect. **Shuffle** to randomise order. **Add All Effects** fills the playlist with every registered effect. |
+| **Strip Preview** | Full-width canvas showing live pixel colors at ~15 fps — works without hardware via `NullPixels` |
+| **Select Effect** | Searchable picker; each row shows name + description. `▶` button (hover to reveal) previews the effect immediately on the strip without closing the picker. **Play** commits and closes. |
+| **Playlist** | Ordered list of effects to cycle through. Drag `⠿` to reorder, click `✕` to remove. Dropdown + **Add** to append; **Shuffle** to randomise; **Add All Effects** fills the playlist. |
 | **Speed** | Multiplier applied to every effect's time delta (0.1× – 10.0×, live) |
 | **Brightness** | Software brightness scale applied to all pixel output (0–100%, live) |
-| **Color** | Single color picker — injected as `COLOR_R/G/B` into every Lua effect each frame |
-| **Palette** | Up to 8 color swatches — injected as `PALETTE[i]` and `PALETTE_SIZE` into every Lua effect each frame |
-| **Audio Input** | Device dropdown with refresh button; VU meter bar and beat indicator; exposes `AUDIO_*` globals to Lua |
+| **Palette** | Up to 8 color swatches — injected as `COLOR_R/G/B` (cycling), `PALETTE[i]`, and `PALETTE_SIZE` into every Lua effect each frame. Cycle speed slider controls how long each color is held (0.5 s – 30 s). |
+| **Audio Input** | Device dropdown + refresh button; VU meter; 16-band spectrum bars; beat dot; BPM display with Tap / ✕ buttons; input gain slider |
+| **Audio EQ** | 16 compact sliders (20 Hz – 16 kHz) for per-band gain (0×–4×); Reset button; persisted |
 | **Effect Duration** | How long each effect plays before auto-advancing (0 = manual only) |
 | **Transition Durations** | Separate sliders for fade-in, crossfade, and fade-out |
 | **Hardware Settings** | Color order (live), gamma (live), LED count and GPIO pin (apply button — reinitializes hardware) |
@@ -316,7 +324,7 @@ All 96 effects are Lua scripts in the `effects/` directory.
 | 💨 Chase | Antialiased comet with a tail proportional to strip length; picks a new random color each lap |
 | 🎄 Christmas | Alternating red and green bands with a slow white twinkle overlay |
 | 🌀 Color Cycle | The whole strip slowly cycles through one solid hue at a time |
-| 🖌️ Color Wipe | Fills the strip with the user-selected color one pixel at a time from one end, then clears it the same way |
+| 🖌️ Color Wipe | Fills the strip with the current palette color one pixel at a time from one end, then clears it the same way |
 | 🌠 Comets | Three comets of different colors chase each other around the strip at different speeds |
 | 🎊 Confetti | Saturated random-hue dots scatter onto a slowly decaying background |
 | 👁️ Cylon | Red Larson-scanner eye bounces back and forth with exponential brightness falloff on either side |
@@ -367,7 +375,7 @@ All 96 effects are Lua scripts in the `effects/` directory.
 | 〰️ Sinelon | A single dot rides a sine wave back and forth leaving a fading trail |
 | 🐍 Snake | Classic snake grows as it eats food items, bouncing between the strip ends |
 | ❄️ Snow Sparkle | Dim white background with a single bright sparkle that jumps to a new position every 200 ms |
-| 🎨 Solid Color | Strip fills with the user-selected color from the Color picker |
+| 🎨 Solid Color | Strip fills with the current `COLOR_R/G/B` palette cycling color |
 | ✨ Sparkle | Pixels independently ramp to a random peak brightness then fade back to dark |
 | 🎇 Sparkler | A drifting source continuously throws fast short-lived sparks in both directions |
 | 🌟 Starfield | Stars at varying depths scroll past — nearer ones brighter and faster |
@@ -422,33 +430,26 @@ All globals are 0 / empty when the corresponding feature is inactive (no device 
 
 | Global | Type | Description |
 |---|---|---|
-| `COLOR_R`, `COLOR_G`, `COLOR_B` | integer 0–255 | Single user-chosen color from the Color card |
+| `COLOR_R`, `COLOR_G`, `COLOR_B` | integer 0–255 | Current palette color, cycling at the configured rate (synchronized across all Lua VMs) |
 | `PALETTE` | table | 1-indexed table; each entry is `{r, g, b}` (integers 0–255) |
 | `PALETTE_SIZE` | integer | Number of colors currently in the palette (0 if empty) |
-| `AUDIO_AMP` | float 0–1 | Smoothed RMS amplitude (auto-gain normalized to recent peak) |
+| `AUDIO_AMP` | float 0–1 | Smoothed RMS amplitude (auto-gain normalized to recent peak, then scaled by input gain) |
 | `AUDIO_BEAT` | float 0–1 | Beat envelope — spikes to 1.0 on each detected beat, decays ~150 ms half-life |
 | `AUDIO_BASS` | float 0–1 | Normalized energy in 20–200 Hz |
 | `AUDIO_MID` | float 0–1 | Normalized energy in 200 Hz – 4 kHz |
 | `AUDIO_HIGH` | float 0–1 | Normalized energy in 4–20 kHz |
-| `AUDIO_SPECTRUM` | table[16] | 1-indexed; 16 log-spaced bands from 20 Hz to 20 kHz, each 0–1 |
+| `AUDIO_SPECTRUM` | table[16] | 1-indexed; 16 log-spaced bands from 20 Hz to 20 kHz, each 0–1 (after per-band EQ gain) |
+| `AUDIO_BPM` | float | Detected or tap-locked BPM (0 when unknown) |
 
 ```lua
--- Single color
-local r = COLOR_R or 255
-local g = COLOR_G or 0
-local b = COLOR_B or 0
-
--- Random palette color
-if PALETTE_SIZE and PALETTE_SIZE > 0 then
-    local c = PALETTE[math.random(1, PALETTE_SIZE)]
-    local r, g, b = c[1], c[2], c[3]
-end
-
--- Cycle through palette by index
+-- Cycle through palette colors manually
 local c = PALETTE[(math.floor(t) % PALETTE_SIZE) + 1]
 
 -- Beat flash
 local flash = math.floor((AUDIO_BEAT or 0) * 255)
+
+-- BPM-synced pulse (fires once per beat)
+local beat_phase = (t * (AUDIO_BPM / 60)) % 1.0
 
 -- Spectrum bar for band i (1–16)
 local level = AUDIO_SPECTRUM and AUDIO_SPECTRUM[i] or 0
@@ -467,7 +468,7 @@ The effect appears in the web UI dropdown automatically. No Rust code changes ne
 
 ### `GET /ws` — WebSocket
 
-Upgrades to a WebSocket connection. The server immediately sends the current state as a JSON text frame, then pushes an updated frame whenever any field changes (within one run-loop frame, ~16 ms). The connection is read-only — the server ignores any frames sent by the client.
+Upgrades to a WebSocket connection. The server immediately sends the current state as a JSON text frame, then pushes an updated frame whenever any field changes (within one run-loop frame, ~16 ms). Pixel data is pushed at ~15 fps whenever effects are running. The connection is read-only — the server ignores any frames sent by the client.
 
 Reconnect automatically on close; the server resends the full current state on each new connection.
 
@@ -477,33 +478,39 @@ Reconnect automatically on close; the server resends the full current state on e
 {
   "is_running": true,
   "current_effect": "Rainbow",
-  "transition": "crossfading",
+  "transition": null,
   "playlist": ["Rainbow", "Fire", "Meteor Rain"],
-  "playlist_index": 1,
+  "playlist_index": 0,
   "effects": ["Rainbow", "Random Fade", "Chase", "..."],
-  "effect_descriptions": { "Rainbow": "Full-strip colour wheel sweep", "..." : "..." },
+  "effect_descriptions": { "Rainbow": "Full-strip colour wheel sweep" },
   "effect_elapsed_secs": 42,
   "fps": 59.8,
   "fade_in_ms": 3000,
   "fade_out_ms": 3000,
   "crossfade_ms": 3000,
-  "effect_duration_ms": 30000,
+  "effect_duration_ms": 0,
   "speed": 1.0,
   "brightness": 1.0,
   "gamma": 2.2,
   "num_pixels": 60,
   "gpio_pin": 18,
   "color_order": "rgb",
-  "user_color": [255, 128, 0],
+  "palette_cycle_ms": 5000,
   "palette": [[255,0,0],[0,255,0],[0,0,255]],
   "audio_devices": ["Built-in Microphone", "USB Audio Device"],
   "audio_device": "USB Audio Device",
   "audio_amplitude": 0.42,
-  "audio_beat": 0.87
+  "audio_beat": 0.87,
+  "audio_gain": 1.5,
+  "audio_bpm": 124.0,
+  "audio_bpm_locked": false,
+  "audio_spectrum": [0.8, 0.6, 0.4, 0.3, 0.2, 0.1, 0.1, 0.05, 0.05, 0.03, 0.02, 0.01, 0.01, 0.0, 0.0, 0.0],
+  "audio_band_gains": [1.0, 1.0, 1.2, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.8, 0.8, 0.8, 0.8],
+  "pixel_data": [[255,0,0],[128,0,0],[0,0,0]]
 }
 ```
 
-`transition` is `"fading_in"`, `"fading_out"`, `"crossfading"`, or `null`.
+`transition` is `"fading_in"`, `"fading_out"`, `"crossfading"`, or `null`. `pixel_data` contains one `[r,g,b]` entry per LED, updated at ~15 fps when effects are running.
 
 ### `POST /api/command`
 
@@ -533,29 +540,39 @@ Reconnect automatically on close; the server resends the full current state on e
 | `set_color_order` | `effect` | Set physical channel order string (e.g. `"grb"`) |
 | `set_num_pixels` | `value_ms` | Reinitialize with a new pixel count |
 | `set_gpio_pin` | `value_ms` | Reinitialize hardware on a different GPIO pin |
-| `set_color` | `r`, `g`, `b` | Set the user color (integers 0–255 each) |
 | `set_palette` | `palette` | Set the palette — array of `{"r":…,"g":…,"b":…}` objects (max 8) |
+| `set_palette_cycle_ms` | `value_ms` | Set how long each palette color is held (ms) |
 | `set_audio_device` | `effect` | Start capturing from the named device (`null` or omit to stop) |
 | `refresh_audio_devices` | — | Re-enumerate input devices and update `audio_devices` in state |
+| `set_audio_gain` | `value` | Set audio input gain multiplier (float, 0.1–5.0) |
+| `tap_tempo` | — | Record a tap; BPM is locked after ≥ 3 taps within 3 s of each other |
+| `clear_tap_tempo` | — | Clear the tap-locked BPM; revert to auto-detection |
+| `set_band_gain` | `index`, `value` | Set EQ gain for band `index` (0–15); float, 0.0–4.0 |
 
 ## Project structure
 
 ```
 src/
-├── main.rs              entry point — CLI flags, Axum server, graceful shutdown
+├── main.rs              entry point — CLI flags, Axum routes, graceful shutdown
 ├── pixels.rs            PixelStrip trait, NullPixels (dev), NeoPixelStrip (hardware), gamma LUT
-├── audio.rs             AudioAnalysis shared state, AudioHandle RAII, list_input_devices /
-│                        start_audio (compiled only with --features audio; stubs otherwise)
+├── audio.rs             AudioAnalysis shared state (amplitude, beat, BPM, band gains, spectrum),
+│                        AudioHandle RAII, list_input_devices / start_audio
+│                        (compiled only with --features audio; stubs otherwise)
 ├── runner.rs            effect thread management, fade/crossfade state machine, playlist,
-│                        persistent state, hardware reinit factories, audio handle lifecycle
-├── api.rs               Axum route handlers
+│                        persistent state, hardware reinit factories, audio handle lifecycle,
+│                        pixel snapshot for strip preview
+├── api.rs               Axum route handlers (HTML, JS, manifest, icons, service worker, WS, REST)
 └── effects/
-    ├── mod.rs           Effect trait, EffectRegistry (with Lua auto-load), LuaBuf helpers
+    ├── mod.rs           Effect trait, EffectRegistry (with Lua auto-load)
     └── lua_effect.rs    LuaEffect wrapper — Lua VM per effect, globals injection, probe_metadata
 effects/                 96 Lua effect scripts (auto-discovered at startup)
 static/
 ├── index.html           control panel (embedded in binary via include_str!)
-└── app.js               frontend JS (embedded in binary via include_str!)
+├── app.js               frontend JS (embedded in binary via include_str!)
+├── manifest.json        PWA manifest
+├── icon.svg             app icon (LED strip motif)
+├── icon-maskable.svg    maskable variant for Android adaptive icons
+└── sw.js                pass-through service worker (enables PWA install prompt)
 Cross.toml               cross-compilation config — installs libasound2-dev:arm64 for audio feature
 led-state.json           persisted UI state (created automatically on first run)
 ```
@@ -597,10 +614,8 @@ Ideas for future development, roughly grouped by theme.
 - **Alarm/flash timer** — flash strip at a scheduled time
 
 ### Audio
-- **BPM display + tap tempo** — show detected BPM; allow manual tap-in to lock tempo
-- **Per-band gain** — EQ-style sliders to boost/cut sensitivity by frequency range
-- **Spectrum visualizer in UI** — live 16-band bar graph next to the VU meter
-- **Audio input gain control** — normalize loud vs. quiet sources without touching system mixer
+- **Onset detection** — distinguish transient attacks (snare hits, plucks) from sustained notes
+- **Key/chord detection** — shift palette hue to match the detected musical key
 
 ### Home automation integration
 - **MQTT support** — publish state, subscribe to commands (play, stop, select effect, brightness)
@@ -613,8 +628,6 @@ Ideas for future development, roughly grouped by theme.
 - **Import/export** — download/upload presets and playlists as JSON
 
 ### UI / UX
-- **Simulated strip preview** — render the active effect in the browser as an SVG/canvas strip (no hardware needed for dev)
-- **PWA / installable** — add `manifest.json` so the page can be pinned to a phone home screen
 - **Keyboard shortcuts** — space = play/pause, arrow keys = next/prev, number keys = brightness steps
 - **Undo for playlist edits** — revert accidental removes or reorders
 
