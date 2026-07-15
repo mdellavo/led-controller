@@ -881,9 +881,14 @@ const renderState = (state) => {
     renderStrip(state.pixel_data);
   }
 
-  // Composite layers + segments
-  renderLayers(state.composite_layers || []);
-  renderSegments(state.segments || []);
+  // Composite layers — only re-render when data changes (innerHTML rebuild closes open selects)
+  const layersJson = JSON.stringify(state.composite_layers || []);
+  if (layersJson !== renderLayers._last) { renderLayers._last = layersJson; renderLayers(state.composite_layers || []); }
+
+  // Segments — same guard
+  const segmentsJson = JSON.stringify(state.segments || []);
+  if (segmentsJson !== renderSegments._last) { renderSegments._last = segmentsJson; renderSegments(state.segments || []); }
+
   if (state.num_pixels != null) currentNumPixels = state.num_pixels;
 
   // Audio levels, spectrum, BPM — update every state push
