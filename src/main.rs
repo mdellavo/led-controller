@@ -15,7 +15,7 @@ use tracing_subscriber::EnvFilter;
 use api::AppState;
 use effects::default_registry;
 use pixels::ColorOrder;
-use runner::{Runner, RunnerConfig, PersistentState, PixelFactory, RegistryFactory};
+use runner::{Runner, RunnerConfig, PersistentState, PixelFactory, RegistryFactory, SegmentEffectFactory};
 
 #[derive(Parser)]
 #[command(about = "WS2812B LED strip controller with web interface")]
@@ -188,6 +188,14 @@ async fn main() -> anyhow::Result<()> {
         r
     });
 
+    let effects_dir_seg = args.effects_dir.clone();
+    let audio_for_seg = Arc::clone(&audio_analysis);
+    let segment_effect_factory: SegmentEffectFactory = Arc::new(move |name: &str, n: usize, pal, cyc_ms| {
+        let mut r = default_registry(n);
+        effects::load_lua_effects(&effects_dir_seg, n, &mut r, pal, cyc_ms, Arc::clone(&audio_for_seg));
+        r.create(name)
+    });
+
     // -----------------------------------------------------------------------
     // Initial pixel strip and registry
     // -----------------------------------------------------------------------
@@ -203,6 +211,7 @@ async fn main() -> anyhow::Result<()> {
 
     let initial_favorites = s.map(|s| s.favorites.clone()).unwrap_or_default();
     let initial_composite_layers = s.map(|s| s.composite_layers.clone()).unwrap_or_default();
+    let initial_segments = s.map(|s| s.segments.clone()).unwrap_or_default();
 
     let config = RunnerConfig {
         fade_in_ms, fade_out_ms, crossfade_ms,
@@ -219,6 +228,8 @@ async fn main() -> anyhow::Result<()> {
         initial_audio_devices,
         initial_favorites,
         initial_composite_layers,
+        initial_segments,
+        segment_effect_factory: Some(segment_effect_factory),
     };
 
     let runner = Runner::new(pixels, registry, config, pixel_factory, registry_factory);

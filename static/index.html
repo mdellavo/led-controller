@@ -582,6 +582,31 @@
       padding: 0.4rem 0; text-align: center;
     }
 
+    /* Segments */
+    .segment-card {
+      border: 1px solid var(--border); border-radius: 8px;
+      padding: 0.6rem 0.75rem; margin-bottom: 0.5rem;
+      display: flex; flex-direction: column; gap: 0.4rem;
+    }
+    .segment-card:last-of-type { margin-bottom: 0; }
+    .segment-row { display: flex; align-items: center; gap: 0.5rem; }
+    .segment-name-input { flex: 1; min-width: 0; }
+    .segment-effect-select { flex: 1; min-width: 0; }
+    .segment-num-input { width: 4rem; flex-shrink: 0; text-align: center; }
+    .segment-color-swatch { width: 2.2rem; height: 2rem; border-radius: 6px; border: 1px solid var(--border); cursor: pointer; flex-shrink: 0; padding: 0; }
+    .segment-remove {
+      background: none; border: 1px solid var(--border); border-radius: 6px;
+      color: var(--text-dim); cursor: pointer; padding: 0.2rem 0.45rem;
+      font-size: 0.8rem; flex-shrink: 0; line-height: 1.4;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .segment-remove:hover { color: #f87171; border-color: #f87171; }
+    .segment-label { font-size: 0.7rem; color: var(--text-dim); flex-shrink: 0; }
+    .no-segments-hint {
+      color: var(--text-dim); font-size: 0.85rem; font-style: italic;
+      padding: 0.4rem 0; text-align: center;
+    }
+
     /* Strip preview */
     .strip-preview {
       background: var(--surface);
@@ -660,6 +685,13 @@
       <div class="card-title">Composite Layers</div>
       <div id="layers-list"></div>
       <button class="btn-secondary" id="btn-add-layer" style="margin-top:0.5rem;width:100%">+ Add Layer</button>
+    </div>
+
+    <!-- Segments -->
+    <div class="card">
+      <div class="card-title">Segments</div>
+      <div id="segments-list"></div>
+      <button class="btn-secondary" id="btn-add-segment" style="margin-top:0.5rem;width:100%">+ Add Segment</button>
     </div>
 
     <!-- Effect selector -->

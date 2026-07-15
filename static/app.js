@@ -322,6 +322,133 @@ document.getElementById('btn-add-layer').addEventListener('click', () => {
   if (firstName) api('add_composite_layer', { effect: firstName, value: 1.0, blend_mode: 'add' });
 });
 
+// --------------------------------------------------------------------------
+// Segments
+// --------------------------------------------------------------------------
+
+const segmentsList = document.getElementById('segments-list');
+
+const toHex = ([r, g, b]) => '#' + [r,g,b].map(v => v.toString(16).padStart(2,'0')).join('');
+const fromHex = (hex) => {
+  const n = parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+};
+
+const renderSegments = (segments) => {
+  segmentsList.innerHTML = '';
+  if (!segments || segments.length === 0) {
+    const hint = document.createElement('div');
+    hint.className = 'no-segments-hint';
+    hint.textContent = 'No segments — whole strip runs primary effect.';
+    segmentsList.appendChild(hint);
+    return;
+  }
+
+  segments.forEach((seg) => {
+    const card = document.createElement('div');
+    card.className = 'segment-card';
+
+    // Row 1: name + effect
+    const row1 = document.createElement('div');
+    row1.className = 'segment-row';
+
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.className = 'segment-name-input';
+    nameInput.value = seg.name || 'Zone';
+    nameInput.placeholder = 'Zone name';
+    nameInput.addEventListener('change', () => {
+      api('update_segment', { segment: { ...seg, name: nameInput.value } });
+    });
+
+    const effectSel = document.createElement('select');
+    effectSel.className = 'segment-effect-select';
+    allEffectOptions.forEach(({ name, label }) => {
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = label;
+      opt.selected = name === seg.effect_name;
+      effectSel.appendChild(opt);
+    });
+    effectSel.addEventListener('change', () => {
+      api('update_segment', { segment: { ...seg, effect_name: effectSel.value } });
+    });
+
+    row1.appendChild(nameInput);
+    row1.appendChild(effectSel);
+
+    // Row 2: start, length, color, remove
+    const row2 = document.createElement('div');
+    row2.className = 'segment-row';
+
+    const startLabel = document.createElement('span');
+    startLabel.className = 'segment-label';
+    startLabel.textContent = 'Start';
+
+    const startInput = document.createElement('input');
+    startInput.type = 'number';
+    startInput.className = 'segment-num-input';
+    startInput.min = 0; startInput.step = 1;
+    startInput.value = seg.start;
+    startInput.addEventListener('change', () => {
+      api('update_segment', { segment: { ...seg, start: parseInt(startInput.value) || 0 } });
+    });
+
+    const lenLabel = document.createElement('span');
+    lenLabel.className = 'segment-label';
+    lenLabel.textContent = 'Len';
+
+    const lenInput = document.createElement('input');
+    lenInput.type = 'number';
+    lenInput.className = 'segment-num-input';
+    lenInput.min = 1; lenInput.step = 1;
+    lenInput.value = seg.length;
+    lenInput.addEventListener('change', () => {
+      api('update_segment', { segment: { ...seg, length: parseInt(lenInput.value) || 1 } });
+    });
+
+    const colorInput = document.createElement('input');
+    colorInput.type = 'color';
+    colorInput.className = 'segment-color-swatch';
+    colorInput.title = 'Segment color (palette[0])';
+    const firstColor = (seg.palette && seg.palette[0]) ? seg.palette[0] : [255, 128, 0];
+    colorInput.value = toHex(firstColor);
+    colorInput.addEventListener('input', () => {
+      const rgb = fromHex(colorInput.value);
+      api('update_segment', { segment: { ...seg, palette: [rgb] } });
+    });
+
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'segment-remove';
+    removeBtn.textContent = '✕';
+    removeBtn.title = 'Remove segment';
+    removeBtn.addEventListener('click', () => api('remove_segment', { index: seg.id }));
+
+    row2.appendChild(startLabel);
+    row2.appendChild(startInput);
+    row2.appendChild(lenLabel);
+    row2.appendChild(lenInput);
+    row2.appendChild(colorInput);
+    row2.appendChild(removeBtn);
+
+    card.appendChild(row1);
+    card.appendChild(row2);
+    segmentsList.appendChild(card);
+  });
+};
+
+let currentNumPixels = 60;
+
+document.getElementById('btn-add-segment').addEventListener('click', () => {
+  const firstName = allEffectOptions.length > 0 ? allEffectOptions[0].name : 'Rainbow';
+  api('add_segment', {
+    segment: {
+      id: 0, name: 'Zone', start: 0, length: Math.max(1, Math.floor(currentNumPixels / 4)),
+      effect_name: firstName, palette: [[255, 128, 0]], palette_cycle_ms: 5000,
+    }
+  });
+});
+
 const api = async (action, extra = {}) => {
   try {
     const res = await fetch('/api/command', {
@@ -754,8 +881,10 @@ const renderState = (state) => {
     renderStrip(state.pixel_data);
   }
 
-  // Composite layers
+  // Composite layers + segments
   renderLayers(state.composite_layers || []);
+  renderSegments(state.segments || []);
+  if (state.num_pixels != null) currentNumPixels = state.num_pixels;
 
   // Audio levels, spectrum, BPM — update every state push
   renderAudioLevels(state.audio_amplitude, state.audio_beat, state.audio_bpm, state.audio_bpm_locked);

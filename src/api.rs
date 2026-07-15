@@ -9,7 +9,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::runner::{Command, Runner};
+use crate::runner::{Command, Runner, SegmentConfig};
 
 // --------------------------------------------------------------------------
 // App state (shared across all handlers via Axum's State extractor)
@@ -151,6 +151,7 @@ pub struct CommandRequest {
     pub to_index: Option<usize>,
     pub palette: Option<Vec<PaletteColor>>,
     pub blend_mode: Option<String>,
+    pub segment: Option<SegmentConfig>,
 }
 
 #[derive(Serialize)]
@@ -218,6 +219,9 @@ pub async fn post_command(
             effect_name: req.effect.clone(),
         }),
         "clear_composite_layers" => Some(Command::ClearCompositeLayers),
+        "add_segment"    => req.segment.clone().map(Command::AddSegment),
+        "remove_segment" => req.index.map(|id| Command::RemoveSegment(id as u32)),
+        "update_segment" => req.segment.clone().map(Command::UpdateSegment),
         _ => None,
     };
 

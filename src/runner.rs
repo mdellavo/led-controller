@@ -130,6 +130,28 @@ fn default_favorites()           -> Vec<String>           { vec![] }
 fn default_opacity()             -> f32                   { 1.0 }
 fn default_blend_add()           -> String                { "add".to_string() }
 fn default_composite_layers()    -> Vec<CompositeLayer>   { vec![] }
+fn default_segments()            -> Vec<SegmentConfig>    { vec![] }
+fn default_segment_name()        -> String                { "Zone".to_string() }
+fn default_segment_palette()     -> Vec<[u8; 3]>          { vec![[255, 128, 0]] }
+
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub struct SegmentConfig {
+    #[serde(default)]
+    pub id: u32,
+    #[serde(default = "default_segment_name")]
+    pub name: String,
+    pub start: usize,
+    pub length: usize,
+    pub effect_name: String,
+    #[serde(default = "default_segment_palette")]
+    pub palette: Vec<[u8; 3]>,
+    #[serde(default = "default_palette_cycle_ms")]
+    pub palette_cycle_ms: u64,
+}
+
+/// Factory that creates a single effect by name with a custom palette.
+/// Used when spawning segment effects so each segment has its own palette Arc.
+pub type SegmentEffectFactory = Arc<dyn Fn(&str, usize, Arc<RwLock<Vec<[u8; 3]>>>, Arc<AtomicU64>) -> Option<Box<dyn Effect>> + Send + Sync>;
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct CompositeLayer {
@@ -158,6 +180,7 @@ pub struct PersistentState {
     #[serde(default = "default_band_gains")]         pub audio_band_gains: Vec<f32>,
     #[serde(default = "default_favorites")]          pub favorites: Vec<String>,
     #[serde(default = "default_composite_layers")]   pub composite_layers: Vec<CompositeLayer>,
+    #[serde(default = "default_segments")]           pub segments: Vec<SegmentConfig>,
 }
 
 impl PersistentState {
@@ -201,6 +224,7 @@ impl From<&SharedState> for PersistentState {
             audio_band_gains: s.audio_band_gains.clone(),
             favorites: s.favorites.clone(),
             composite_layers: s.composite_layers.clone(),
+            segments: s.segments.clone(),
         }
     }
 }
@@ -244,6 +268,9 @@ pub enum Command {
     RemoveCompositeLayer(usize),
     UpdateCompositeLayer { index: usize, opacity: f32, blend_mode: String, effect_name: Option<String> },
     ClearCompositeLayers,
+    AddSegment(SegmentConfig),
+    RemoveSegment(u32),
+    UpdateSegment(SegmentConfig),
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -281,6 +308,7 @@ pub struct SharedState {
     pub pixel_data: Vec<[u8; 3]>,
     pub favorites: Vec<String>,
     pub composite_layers: Vec<CompositeLayer>,
+    pub segments: Vec<SegmentConfig>,
 }
 
 // --------------------------------------------------------------------------
@@ -316,6 +344,10 @@ pub struct RunnerConfig {
     pub initial_favorites: Vec<String>,
     /// Composite layers loaded from saved state.
     pub initial_composite_layers: Vec<CompositeLayer>,
+    /// Segments loaded from saved state.
+    pub initial_segments: Vec<SegmentConfig>,
+    /// Factory to create a single named effect with a custom palette Arc (for segments).
+    pub segment_effect_factory: Option<SegmentEffectFactory>,
 }
 
 impl Default for RunnerConfig {
@@ -332,6 +364,8 @@ impl Default for RunnerConfig {
             initial_audio_devices: Vec::new(),
             initial_favorites: Vec::new(),
             initial_composite_layers: Vec::new(),
+            initial_segments: Vec::new(),
+            segment_effect_factory: None,
         }
     }
 }
@@ -416,6 +450,7 @@ impl Runner {
             pixel_data: vec![[0u8; 3]; num_pixels],
             favorites: config.initial_favorites.clone(),
             composite_layers: config.initial_composite_layers.clone(),
+            segments: config.initial_segments.clone(),
         }));
 
         let state_clone  = Arc::clone(&shared_state);
@@ -473,6 +508,31 @@ fn do_spawn(
 }
 
 // --------------------------------------------------------------------------
+// Segment runtime state (not serialized)
+// --------------------------------------------------------------------------
+
+struct SegmentHandle {
+    config: SegmentConfig,
+    handle: EffectHandle,
+    palette: Arc<RwLock<Vec<[u8; 3]>>>,
+    cycle_ms: Arc<AtomicU64>,
+}
+
+impl SegmentHandle {
+    fn spawn(
+        config: SegmentConfig,
+        factory: &SegmentEffectFactory,
+        speed: Arc<AtomicU32>,
+    ) -> Option<Self> {
+        let palette = Arc::new(RwLock::new(config.palette.clone()));
+        let cycle_ms = Arc::new(AtomicU64::new(config.palette_cycle_ms));
+        let effect = factory(&config.effect_name, config.length, Arc::clone(&palette), Arc::clone(&cycle_ms))?;
+        let handle = EffectHandle::spawn(effect, config.length, speed);
+        Some(Self { config, handle, palette, cycle_ms })
+    }
+}
+
+// --------------------------------------------------------------------------
 // Main runner loop (runs in its own thread)
 // --------------------------------------------------------------------------
 
@@ -511,6 +571,19 @@ fn run_loop(
         .filter_map(|l| registry.create(&l.effect_name)
             .map(|e| (EffectHandle::spawn(e, num_pixels, Arc::clone(&speed)), l.clone())))
         .collect();
+
+    let mut next_segment_id: u32 = 1;
+    let mut segment_handles: Vec<SegmentHandle> = Vec::new();
+    if let Some(ref factory) = config.segment_effect_factory {
+        for seg_cfg in &config.initial_segments {
+            let mut cfg = seg_cfg.clone();
+            if cfg.id == 0 { cfg.id = next_segment_id; next_segment_id += 1; }
+            else { next_segment_id = next_segment_id.max(cfg.id + 1); }
+            if let Some(sh) = SegmentHandle::spawn(cfg, factory, Arc::clone(&speed)) {
+                segment_handles.push(sh);
+            }
+        }
+    }
 
     let mut black = vec![[0u8; 3]; num_pixels];
     let mut state = RunnerState::Idle;
@@ -596,6 +669,13 @@ fn run_loop(
                         .filter_map(|(_, layer)| registry.create(&layer.effect_name)
                             .map(|e| (EffectHandle::spawn(e, n, Arc::clone(&speed)), layer)))
                         .collect();
+                    if let Some(ref factory) = config.segment_effect_factory {
+                        for sh in segment_handles.iter_mut() {
+                            if let Some(effect) = factory(&sh.config.effect_name, sh.config.length, Arc::clone(&sh.palette), Arc::clone(&sh.cycle_ms)) {
+                                sh.handle = EffectHandle::spawn(effect, sh.config.length, Arc::clone(&speed));
+                            }
+                        }
+                    }
                     tracing::info!(num_pixels = n, "pixel count changed, restarting");
                     if let Ok(mut st) = shared.lock() {
                         st.num_pixels = n;
@@ -616,6 +696,13 @@ fn run_loop(
                         .filter_map(|(_, layer)| registry.create(&layer.effect_name)
                             .map(|e| (EffectHandle::spawn(e, num_pixels, Arc::clone(&speed)), layer)))
                         .collect();
+                    if let Some(ref factory) = config.segment_effect_factory {
+                        for sh in segment_handles.iter_mut() {
+                            if let Some(effect) = factory(&sh.config.effect_name, sh.config.length, Arc::clone(&sh.palette), Arc::clone(&sh.cycle_ms)) {
+                                sh.handle = EffectHandle::spawn(effect, sh.config.length, Arc::clone(&speed));
+                            }
+                        }
+                    }
                     tracing::info!(gpio_pin = pin, "GPIO pin changed, reinitializing hardware");
                     if let Ok(mut st) = shared.lock() { st.gpio_pin = pin; }
                     if let Some(h) = do_spawn(&playlist, playlist_index, &registry, num_pixels, Arc::clone(&speed)) {
@@ -839,6 +926,52 @@ fn run_loop(
                     composite_handles.clear();
                     if let Ok(mut s) = shared.lock() { s.composite_layers.clear(); dirty = true; }
                 }
+                Command::AddSegment(mut cfg) => {
+                    if let Some(ref factory) = config.segment_effect_factory {
+                        cfg.id = next_segment_id;
+                        next_segment_id += 1;
+                        let cfg_clone = cfg.clone();
+                        if let Some(sh) = SegmentHandle::spawn(cfg, factory, Arc::clone(&speed)) {
+                            segment_handles.push(sh);
+                            if let Ok(mut s) = shared.lock() { s.segments.push(cfg_clone); dirty = true; }
+                        }
+                    }
+                }
+                Command::RemoveSegment(id) => {
+                    if let Some(pos) = segment_handles.iter().position(|s| s.config.id == id) {
+                        segment_handles.remove(pos);
+                        if let Ok(mut s) = shared.lock() {
+                            s.segments.retain(|seg| seg.id != id);
+                            dirty = true;
+                        }
+                    }
+                }
+                Command::UpdateSegment(new_cfg) => {
+                    if let Some(sh) = segment_handles.iter_mut().find(|s| s.config.id == new_cfg.id) {
+                        // Update palette Arc if changed
+                        if sh.config.palette != new_cfg.palette {
+                            if let Ok(mut p) = sh.palette.write() { *p = new_cfg.palette.clone(); }
+                        }
+                        sh.cycle_ms.store(new_cfg.palette_cycle_ms, Ordering::Relaxed);
+                        // Respawn effect if name or length changed
+                        let needs_respawn = sh.config.effect_name != new_cfg.effect_name
+                            || sh.config.length != new_cfg.length;
+                        sh.config = new_cfg.clone();
+                        if needs_respawn {
+                            if let Some(ref factory) = config.segment_effect_factory {
+                                if let Some(effect) = factory(&new_cfg.effect_name, new_cfg.length, Arc::clone(&sh.palette), Arc::clone(&sh.cycle_ms)) {
+                                    sh.handle = EffectHandle::spawn(effect, new_cfg.length, Arc::clone(&speed));
+                                }
+                            }
+                        }
+                        if let Ok(mut s) = shared.lock() {
+                            if let Some(seg) = s.segments.iter_mut().find(|seg| seg.id == new_cfg.id) {
+                                *seg = new_cfg;
+                            }
+                            dirty = true;
+                        }
+                    }
+                }
             }
         }
 
@@ -912,6 +1045,17 @@ fn run_loop(
         };
 
         state = next_state;
+
+        // --- segments: overwrite their pixel ranges with independent effects ---
+        for sh in &segment_handles {
+            let seg_buf = sh.handle.read_buffer();
+            let start = sh.config.start.min(output.len());
+            let end = (sh.config.start + sh.config.length).min(output.len());
+            let copy_len = (end - start).min(seg_buf.len());
+            if copy_len > 0 {
+                output[start..start + copy_len].copy_from_slice(&seg_buf[..copy_len]);
+            }
+        }
 
         // --- composite layers: blend additional effect buffers onto primary output ---
         for (handle, layer) in &composite_handles {
